@@ -6,7 +6,7 @@ This is a simple search library implemented using `sklearn` and `pandas`.
 
 It allows you to index documents with text and keyword fields and perform search queries with support for filtering and boosting.
 
-# Installation
+## Installation
 
 Make sure you have the required dependencies installed:
 
@@ -20,12 +20,12 @@ Alternatively, use pipenv:
 pipenv install --dev
 ```
 
-# Usage
+## Usage
 
 Here's how you can use the library:
 
 
-## Define Your Documents
+### Define Your Documents
 
 Prepare your documents as a list of dictionaries. Each dictionary should have the text and keyword fields you want to index.
 
@@ -45,7 +45,8 @@ docs = [
     }
 ]
 ```
-## Create the Index
+
+### Create the Index
 
 Create an instance of the `Index` class, specifying the text and keyword fields.
 
@@ -65,7 +66,7 @@ Fit the index with your documents
 index.fit(docs)
 ```
 
-# Perform a Search
+### Perform a Search
 
 Search the index with a query string, optional filter dictionary, and optional boost dictionary.
 
@@ -81,9 +82,9 @@ for result in results:
     print(result)
 ```
 
-# Notebook 
+## Notebook 
 
-Run a notebook to test it yourself
+Run it in a notebook to test it yourself
 
 ```bash
 pipenv run jupyter notebook
