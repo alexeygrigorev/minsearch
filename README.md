@@ -6,9 +6,16 @@ This is a simple search library implemented using `sklearn` and `pandas`.
 
 It allows you to index documents with text and keyword fields and perform search queries with support for filtering and boosting.
 
-## Installation
+## Installation 
 
-Make sure you have the required dependencies installed:
+```bash
+pip install minsearch
+```
+
+
+## Environment setup
+
+To run it locally, make sure you have the required dependencies installed:
 
 ```bash
 pip install pandas scikit-learn
@@ -89,3 +96,53 @@ Run it in a notebook to test it yourself
 ```bash
 pipenv run jupyter notebook
 ```
+
+## File structure
+
+There's `minsearch` folder and `minsearch.py` file in the root. 
+
+The file `minsearch.py` is kept there because it was used in
+the LLM Zoomcamp course, where we'd use `wget` to donwload it.
+To avoid breaking changes, we keep the file.
+
+
+
+## Publishing
+
+Use `twine` for publishing and `build` for building
+
+```bash
+pipenv install --dev twine build
+```
+
+Generate a wheel:
+
+```python
+pipenv run python -m build
+```
+
+Check the packages:
+
+```bash
+pipenv run twine check dist/*
+```
+
+Upload the library to test PyPI to verify everything is working:
+
+```bash
+pipenv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+```
+
+Upload to PyPI:
+
+```bash
+pipenv run twine upload dist/*
+```
+
+Clean:
+
+```bash
+rm -r build/ dist/ minsearch.egg-info/
+```
+
+Done!

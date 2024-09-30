@@ -10,6 +10,8 @@ pandas = "*"
 [dev-packages]
 notebook = "*"
 requests = "*"
+twine = "*"
+build = "*"
 
 [requires]
-python_version = "3.9"
+python_version = "3.12"
