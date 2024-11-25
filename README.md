@@ -6,6 +6,8 @@ This is a simple search library implemented using `sklearn` and `pandas`.
 
 It allows you to index documents with text and keyword fields and perform search queries with support for filtering and boosting.
 
+If you want to learn how it was build, watch the ["Implement a search engine" workshop](https://www.youtube.com/watch?v=nMrGK5QgPVE)
+
 ## Installation 
 
 ```bash
