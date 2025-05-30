@@ -146,6 +146,94 @@ class AppendableIndex:
         
         return tf * idf
 
+    def _get_matching_documents(self, field, tokens):
+        """Get set of document IDs that match any of the given tokens in the field."""
+        matching_docs = set()
+        for token in tokens:
+            if token in self.inverted_index[field]:
+                matching_docs.update(self.inverted_index[field][token])
+        return matching_docs
+
+    def _create_query_vector(self, field, query_tokens):
+        """Create and normalize TF-IDF vector for the query in the given field."""
+        # Get unique query tokens that exist in this field
+        field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
+        if not field_tokens:
+            return None, None
+            
+        # Calculate query vector
+        query_vector = np.zeros(len(field_tokens))
+        for i, token in enumerate(field_tokens):
+            # Calculate TF-IDF for query token
+            tf = 1 + math.log(query_tokens.count(token)) if query_tokens.count(token) > 0 else 0
+            df = self.doc_frequencies[field][token]
+            idf = math.log((self.total_docs + 1) / (df + 1)) + 1
+            query_vector[i] = tf * idf
+        
+        # L2 normalize the query vector
+        query_norm = np.linalg.norm(query_vector)
+        if query_norm > 0:
+            query_vector = query_vector / query_norm
+            
+        return query_vector, field_tokens
+
+    def _create_document_vectors(self, field, field_tokens, matching_docs):
+        """Create and normalize TF-IDF vectors for matching documents in the given field."""
+        doc_vectors = {}
+        for doc_id in matching_docs:
+            doc_vector = np.zeros(len(field_tokens))
+            doc_tokens = self._process_text(self.docs[doc_id].get(field, ''))
+            if doc_tokens:
+                # Calculate TF-IDF for each matching token
+                for i, token in enumerate(field_tokens):
+                    if token in doc_tokens:
+                        tfidf = self._calculate_tfidf(field, token, doc_id)
+                        doc_vector[i] = tfidf
+                # L2 normalize the document vector
+                doc_norm = np.linalg.norm(doc_vector)
+                if doc_norm > 0:
+                    doc_vector = doc_vector / doc_norm
+                doc_vectors[doc_id] = doc_vector
+        return doc_vectors
+
+    def _calculate_field_scores(self, query_vector, doc_vectors):
+        """Calculate cosine similarity scores between query and document vectors."""
+        field_scores = np.zeros(len(self.docs))
+        for doc_id, doc_vector in doc_vectors.items():
+            field_scores[doc_id] = np.dot(query_vector, doc_vector)
+        return field_scores
+
+    def _apply_keyword_filters(self, scores, filter_dict):
+        """Apply keyword filters to the scores."""
+        for field, value in filter_dict.items():
+            if field in self.keyword_fields:
+                mask = np.array([val == value for val in self.keyword_data[field]])
+                scores = scores * mask
+        return scores
+
+    def _get_top_results(self, scores, num_results):
+        """Get top scoring documents based on the scores."""
+        # Get number of non-zero scores
+        non_zero_mask = scores > 0
+        non_zero_count = np.sum(non_zero_mask)
+        
+        if non_zero_count == 0:
+            return []
+            
+        # Ensure num_results doesn't exceed the number of non-zero scores
+        num_results = min(num_results, non_zero_count)
+        
+        # Get indices of non-zero scores
+        non_zero_indices = np.where(non_zero_mask)[0]
+        
+        # Sort non-zero scores in descending order
+        sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
+        
+        # Take top num_results
+        top_indices = sorted_indices[:num_results]
+
+        return [self.docs[i] for i in top_indices]
+
     def fit(self, docs):
         """
         Fits the index with the provided documents.
@@ -211,89 +299,34 @@ class AppendableIndex:
         if not self.docs:
             return []
             
-        scores = np.zeros(len(self.docs))
         query_tokens = self._process_text(query)
-        
         if not query_tokens:  # Handle empty queries
             return []
         
+        scores = np.zeros(len(self.docs))
+        
         # Calculate scores for each text field
         for field in self.text_fields:
-            # Get unique query tokens that exist in this field
-            field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
-            if not field_tokens:
+            # Create query vector
+            query_vector, field_tokens = self._create_query_vector(field, query_tokens)
+            if query_vector is None:
                 continue
-                
-            # Calculate query vector
-            query_vector = np.zeros(len(field_tokens))
-            for i, token in enumerate(field_tokens):
-                # Calculate TF-IDF for query token
-                tf = 1 + math.log(query_tokens.count(token)) if query_tokens.count(token) > 0 else 0
-                df = self.doc_frequencies[field][token]
-                idf = math.log((self.total_docs + 1) / (df + 1)) + 1
-                query_vector[i] = tf * idf
-            
-            # L2 normalize the query vector
-            query_norm = np.linalg.norm(query_vector)
-            if query_norm > 0:
-                query_vector = query_vector / query_norm
-            
-            # Get all documents that match any query token
-            matching_docs = set()
-            for token in field_tokens:
-                matching_docs.update(self.inverted_index[field][token])
-            
-            # Calculate document vectors only for matching documents
-            doc_vectors = {}
-            for doc_id in matching_docs:
-                doc_vector = np.zeros(len(field_tokens))
-                doc_tokens = self._process_text(self.docs[doc_id].get(field, ''))
-                if doc_tokens:
-                    # Calculate TF-IDF for each matching token
-                    for i, token in enumerate(field_tokens):
-                        if token in doc_tokens:
-                            tfidf = self._calculate_tfidf(field, token, doc_id)
-                            doc_vector[i] = tfidf
-                    # L2 normalize the document vector
-                    doc_norm = np.linalg.norm(doc_vector)
-                    if doc_norm > 0:
-                        doc_vector = doc_vector / doc_norm
-                    doc_vectors[doc_id] = doc_vector
-            
-            # Calculate cosine similarity for matching documents
-            field_scores = np.zeros(len(self.docs))
-            for doc_id, doc_vector in doc_vectors.items():
-                field_scores[doc_id] = np.dot(query_vector, doc_vector)
-            
+
+            # Get matching documents
+            matching_docs = self._get_matching_documents(field, field_tokens)
+
+            # Create document vectors
+            doc_vectors = self._create_document_vectors(field, field_tokens, matching_docs)
+
+            # Calculate field scores
+            field_scores = self._calculate_field_scores(query_vector, doc_vectors)
+
             # Apply boost
             boost = boost_dict.get(field, 1)
             scores += field_scores * boost
         
         # Apply keyword filters
-        for field, value in filter_dict.items():
-            if field in self.keyword_fields:
-                # Create mask using list comprehension instead of pandas
-                mask = np.array([val == value for val in self.keyword_data[field]])
-                scores = scores * mask
-        
-        # Get number of non-zero scores
-        non_zero_mask = scores > 0
-        non_zero_count = np.sum(non_zero_mask)
-        
-        if non_zero_count == 0:
-            return []
-            
-        # Ensure num_results doesn't exceed the number of non-zero scores
-        num_results = min(num_results, non_zero_count)
-        
-        # Get indices of non-zero scores
-        non_zero_indices = np.where(non_zero_mask)[0]
-        
-        # Sort non-zero scores in descending order
-        sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
-        
-        # Take top num_results
-        top_indices = sorted_indices[:num_results]
-        
-        # Return corresponding documents
-        return [self.docs[i] for i in top_indices] 
+        scores = self._apply_keyword_filters(scores, filter_dict)
+
+        # Get top results
+        return self._get_top_results(scores, num_results) 
