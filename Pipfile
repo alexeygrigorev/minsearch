@@ -12,6 +12,7 @@ notebook = "*"
 requests = "*"
 twine = "*"
 build = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.12"

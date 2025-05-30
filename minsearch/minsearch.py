@@ -31,6 +31,16 @@ class Index:
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields
 
+        # Set default vectorizer parameters to ensure we always have terms
+        default_params = {
+            'min_df': 1,  # Include terms that appear in at least 1 document
+            'max_df': 1.0,  # Include terms that appear in all documents
+            'token_pattern': r'(?u)\b\w\w+\b',  # Match words with at least 2 characters
+            'stop_words': None  # Don't remove any stop words by default
+        }
+        # Update with user parameters, but ensure defaults are used if not specified
+        vectorizer_params = {**default_params, **vectorizer_params}
+
         self.vectorizers = {field: TfidfVectorizer(**vectorizer_params) for field in text_fields}
         self.keyword_df = None
         self.text_matrices = {}
@@ -46,9 +56,22 @@ class Index:
         self.docs = docs
         keyword_data = {field: [] for field in self.keyword_fields}
 
+        # Handle empty documents case
+        if not docs:
+            self.keyword_df = pd.DataFrame(keyword_data)
+            return self
+
         for field in self.text_fields:
             texts = [doc.get(field, '') for doc in docs]
-            self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
+            try:
+                self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
+            except ValueError as e:
+                if "no terms remain" in str(e) or "empty vocabulary" in str(e):
+                    # If no terms remain, create a dummy matrix with a single term
+                    dummy_text = "dummy_term"  # A term that won't be filtered out
+                    self.text_matrices[field] = self.vectorizers[field].fit_transform([dummy_text])
+                else:
+                    raise
 
         for doc in docs:
             for field in self.keyword_fields:
@@ -71,6 +94,9 @@ class Index:
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
         """
+        if not self.docs:
+            return []
+            
         query_vecs = {field: self.vectorizers[field].transform([query]) for field in self.text_fields}
         scores = np.zeros(len(self.docs))
 
@@ -86,11 +112,24 @@ class Index:
                 mask = self.keyword_df[field] == value
                 scores = scores * mask.to_numpy()
 
-        # Use argpartition to get top num_results indices
-        top_indices = np.argpartition(scores, -num_results)[-num_results:]
-        top_indices = top_indices[np.argsort(-scores[top_indices])]
-
-        # Filter out zero-score results
-        top_docs = [self.docs[i] for i in top_indices if scores[i] > 0]
-
-        return top_docs
+        # Get number of non-zero scores
+        non_zero_mask = scores > 0
+        non_zero_count = np.sum(non_zero_mask)
+        
+        if non_zero_count == 0:
+            return []
+            
+        # Ensure num_results doesn't exceed the number of non-zero scores
+        num_results = min(num_results, non_zero_count)
+        
+        # Get indices of non-zero scores
+        non_zero_indices = np.where(non_zero_mask)[0]
+        
+        # Sort non-zero scores in descending order
+        sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
+        
+        # Take top num_results
+        top_indices = sorted_indices[:num_results]
+        
+        # Return corresponding documents
+        return [self.docs[i] for i in top_indices]
