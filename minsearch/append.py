@@ -137,7 +137,8 @@ class AppendableIndex:
         if not doc_tokens:  # Handle empty documents
             return 0
             
-        tf = doc_tokens.count(token) / len(doc_tokens)
+        # Use sublinear TF scaling like scikit-learn
+        tf = 1 + math.log(doc_tokens.count(token)) if doc_tokens.count(token) > 0 else 0
         
         # Inverse document frequency (IDF)
         df = self.doc_frequencies[field][token]
@@ -218,13 +219,51 @@ class AppendableIndex:
         
         # Calculate scores for each text field
         for field in self.text_fields:
-            field_scores = np.zeros(len(self.docs))
+            # Get unique query tokens that exist in this field
+            field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
+            if not field_tokens:
+                continue
+                
+            # Calculate query vector
+            query_vector = np.zeros(len(field_tokens))
+            for i, token in enumerate(field_tokens):
+                # Calculate TF-IDF for query token
+                tf = 1 + math.log(query_tokens.count(token)) if query_tokens.count(token) > 0 else 0
+                df = self.doc_frequencies[field][token]
+                idf = math.log((self.total_docs + 1) / (df + 1)) + 1
+                query_vector[i] = tf * idf
             
-            # Calculate TF-IDF scores for each query token
-            for token in query_tokens:
-                if token in self.inverted_index[field]:
-                    for doc_id in self.inverted_index[field][token]:
-                        field_scores[doc_id] += self._calculate_tfidf(field, token, doc_id)
+            # L2 normalize the query vector
+            query_norm = np.linalg.norm(query_vector)
+            if query_norm > 0:
+                query_vector = query_vector / query_norm
+            
+            # Get all documents that match any query token
+            matching_docs = set()
+            for token in field_tokens:
+                matching_docs.update(self.inverted_index[field][token])
+            
+            # Calculate document vectors only for matching documents
+            doc_vectors = {}
+            for doc_id in matching_docs:
+                doc_vector = np.zeros(len(field_tokens))
+                doc_tokens = self._process_text(self.docs[doc_id].get(field, ''))
+                if doc_tokens:
+                    # Calculate TF-IDF for each matching token
+                    for i, token in enumerate(field_tokens):
+                        if token in doc_tokens:
+                            tfidf = self._calculate_tfidf(field, token, doc_id)
+                            doc_vector[i] = tfidf
+                    # L2 normalize the document vector
+                    doc_norm = np.linalg.norm(doc_vector)
+                    if doc_norm > 0:
+                        doc_vector = doc_vector / doc_norm
+                    doc_vectors[doc_id] = doc_vector
+            
+            # Calculate cosine similarity for matching documents
+            field_scores = np.zeros(len(self.docs))
+            for doc_id, doc_vector in doc_vectors.items():
+                field_scores[doc_id] = np.dot(query_vector, doc_vector)
             
             # Apply boost
             boost = boost_dict.get(field, 1)
