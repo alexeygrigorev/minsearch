@@ -162,3 +162,263 @@ def test_num_results(text_fields, keyword_fields, sample_docs):
         results = index.search("python", num_results=n)
         assert len(results) <= n
 
+
+def test_basic_search():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    results = index.search("python")
+    assert len(results) > 0
+    assert results[0]["title"] == "Python Programming"
+
+
+def test_filter_combinations():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    # Test single filter
+    results = index.search("programming", filter_dict={"course": "CS101"})
+    assert len(results) > 0
+    assert results[0]["course"] == "CS101"
+    
+    # Test non-existent filter
+    results = index.search("programming", filter_dict={"course": "non_existent"})
+    assert len(results) == 0
+    
+    # Test multiple filters
+    results = index.search("programming", filter_dict={"course": "CS101", "non_existent": "value"})
+    assert len(results) > 0
+
+
+def test_boost_combinations():
+    docs = [
+        {"title": "Python Programming", "description": "Learn Python programming"},
+        {"title": "Data Science", "description": "Python for data science"}
+    ]
+    index = Index(text_fields=["title", "description"], keyword_fields=[])
+    index.fit(docs)
+    
+    # Test without boost
+    results = index.search("python")
+    assert len(results) > 0
+    
+    # Test with boost
+    results = index.search("python", boost_dict={"title": 2.0})
+    assert len(results) > 0
+
+
+def test_empty_docs():
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit([])
+    
+    results = index.search("python")
+    assert len(results) == 0
+
+
+def test_vectorizer_parameters():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    
+    # Test with custom parameters
+    index = Index(
+        text_fields=["title"],
+        keyword_fields=["course"],
+        vectorizer_params={"min_df": 1, "max_df": 1.0}
+    )
+    index.fit(docs)
+    
+    results = index.search("python")
+    assert len(results) > 0
+
+
+def test_multiple_text_fields():
+    docs = [
+        {"title": "Python Programming", "description": "Learn Python programming"},
+        {"title": "Data Science", "description": "Python for data science"}
+    ]
+    index = Index(text_fields=["title", "description"], keyword_fields=[])
+    index.fit(docs)
+    
+    results = index.search("python")
+    assert len(results) > 0
+
+
+def test_keyword_fields():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    results = index.search("programming", filter_dict={"course": "CS101"})
+    assert len(results) > 0
+    assert results[0]["course"] == "CS101"
+
+
+def test_num_results():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    results = index.search("python", num_results=1)
+    assert len(results) == 1
+
+
+def test_readme_example():
+    # Test the exact example from README
+    docs = [
+        {"title": "Python Programming", "description": "Learn Python programming", "course": "CS101"},
+        {"title": "Data Science", "description": "Python for data science", "course": "CS102"},
+        {"title": "Machine Learning", "description": "Introduction to ML", "course": "CS103"}
+    ]
+    
+    index = Index(
+        text_fields=["title", "description"],
+        keyword_fields=["course"]
+    )
+    index.fit(docs)
+    
+    # Test basic search
+    results = index.search("python")
+    assert len(results) > 0
+    assert results[0]["title"] == "Python Programming"
+    
+    # Test with filters
+    results = index.search("python", filter_dict={"course": "CS101"})
+    assert len(results) > 0
+    assert results[0]["course"] == "CS101"
+    
+    # Test with boost
+    results = index.search("python", boost_dict={"title": 2.0})
+    assert len(results) > 0
+    
+    # Test with multiple filters
+    results = index.search("python", filter_dict={"course": "CS101", "non_existent": "value"})
+    assert len(results) > 0
+
+
+def test_stop_words():
+    docs = [
+        {"title": "The Python Programming", "description": "Learn the Python programming"},
+        {"title": "Data Science", "description": "Python for data science"}
+    ]
+    
+    # Test with default stop words
+    index = Index(text_fields=["title", "description"], keyword_fields=[])
+    index.fit(docs)
+    
+    results = index.search("the python")
+    assert len(results) > 0
+    
+    # Test with custom stop words
+    index = Index(
+        text_fields=["title", "description"],
+        keyword_fields=[],
+        vectorizer_params={"stop_words": ["the", "a", "an"]}
+    )
+    index.fit(docs)
+    
+    results = index.search("the python")
+    assert len(results) > 0
+
+
+def test_empty_query():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Data Science", "course": "CS102"}
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    results = index.search("")
+    assert len(results) == 0
+
+
+def test_special_characters():
+    docs = [
+        {"title": "Python-Programming", "description": "Learn Python (programming)"},
+        {"title": "Data-Science", "description": "Python for data-science"}
+    ]
+    index = Index(text_fields=["title", "description"], keyword_fields=[])
+    index.fit(docs)
+    
+    results = index.search("python-programming")
+    assert len(results) > 0
+    assert results[0]["title"] == "Python-Programming"
+
+
+def test_boost_affects_ranking():
+    """Test that boost parameters affect the ranking of search results."""
+    docs = [
+        {
+            "title": "Introduction to Programming",
+            "description": "Python is a popular programming language. Python is used in many applications.",
+            "course": "CS101"
+        },
+        {
+            "title": "Python for Beginners",
+            "description": "Learn the basics of programming",
+            "course": "CS102"
+        },
+        {
+            "title": "Advanced Topics",
+            "description": "Python is essential for data science. Python is used in machine learning.",
+            "course": "CS103"
+        }
+    ]
+    
+    index = Index(text_fields=["title", "description"], keyword_fields=["course"])
+    index.fit(docs)
+    
+    # Search without boost
+    results_no_boost = index.search("python")
+    assert len(results_no_boost) > 0
+    
+    # Search with title boost (high value to ensure it affects ranking)
+    results_title_boost = index.search("python", boost_dict={"title": 10.0})
+    assert len(results_title_boost) > 0
+    
+    # Search with description boost (high value to ensure it affects ranking)
+    results_desc_boost = index.search("python", boost_dict={"description": 10.0})
+    assert len(results_desc_boost) > 0
+    
+    # Verify that boosting affects ranking
+    # When title is boosted, documents with "Python" in title should rank higher
+    title_boosted_first = results_title_boost[0]
+    assert "Python" in title_boosted_first["title"], "Title boost should rank documents with Python in title higher"
+    
+    # When description is boosted, documents with more mentions of "Python" in description should rank higher
+    desc_boosted_first = results_desc_boost[0]
+    assert "Python" in desc_boosted_first["description"], "Description boost should rank documents with Python in description higher"
+    
+    # The rankings should be different between no boost and boosted searches
+    # Check that the first result is different between searches
+    assert results_no_boost[0] != results_title_boost[0] or results_no_boost[0] != results_desc_boost[0], "Boosting should change the ranking"
+    
+    # Additional checks for specific ranking changes
+    # With title boost, documents with Python in title should be ranked higher
+    title_boosted_titles = [doc["title"] for doc in results_title_boost]
+    assert "Python" in title_boosted_titles[0], "Title boost should rank documents with Python in title higher"
+    
+    # With description boost, documents with more Python mentions in description should be ranked higher
+    desc_boosted_descriptions = [doc["description"] for doc in results_desc_boost]
+    assert "Python" in desc_boosted_descriptions[0], "Description boost should rank documents with Python in description higher"
+    
+    # Verify that the document with most Python mentions in description is ranked highest with description boost
+    python_mentions = [doc["description"].lower().count("python") for doc in results_desc_boost]
+    assert python_mentions[0] == max(python_mentions), "Description boost should rank documents with more Python mentions higher"
+
