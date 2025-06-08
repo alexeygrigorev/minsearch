@@ -5,6 +5,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 import numpy as np
 
+import warnings
+warnings.warn(
+    "Now minsearch is installable via pip: 'pip install minsearch'. "
+    "Remove the downloaded file and re-install it with pip.",
+    UserWarning
+)
+
 
 class Index:
     """
