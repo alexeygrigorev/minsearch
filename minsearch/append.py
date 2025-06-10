@@ -11,34 +11,189 @@ class Tokenizer:
     A custom tokenizer that splits text into tokens and removes stop words.
     Mimics sklearn's default tokenizer behavior.
     """
-    
+
     # Common English stop words (similar to sklearn's default)
     DEFAULT_STOP_WORDS = {
-        'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and',
-        'any', 'are', 'aren\'t', 'as', 'at', 'be', 'because', 'been', 'before', 'being',
-        'below', 'between', 'both', 'but', 'by', 'can\'t', 'cannot', 'could', 'couldn\'t',
-        'did', 'didn\'t', 'do', 'does', 'doesn\'t', 'doing', 'don\'t', 'down', 'during',
-        'each', 'few', 'for', 'from', 'further', 'had', 'hadn\'t', 'has', 'hasn\'t', 'have',
-        'haven\'t', 'having', 'he', 'he\'d', 'he\'ll', 'he\'s', 'her', 'here', 'here\'s',
-        'hers', 'herself', 'him', 'himself', 'his', 'how', 'how\'s', 'i', 'i\'d', 'i\'ll',
-        'i\'m', 'i\'ve', 'if', 'in', 'into', 'is', 'isn\'t', 'it', 'it\'s', 'its', 'itself',
-        'let\'s', 'me', 'more', 'most', 'mustn\'t', 'my', 'myself', 'no', 'nor', 'not',
-        'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves',
-        'out', 'over', 'own', 'same', 'shan\'t', 'she', 'she\'d', 'she\'ll', 'she\'s',
-        'should', 'shouldn\'t', 'so', 'some', 'such', 'than', 'that', 'that\'s', 'the',
-        'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there\'s', 'these',
-        'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'this', 'those', 'through',
-        'to', 'too', 'under', 'until', 'up', 'very', 'was', 'wasn\'t', 'we', 'we\'d',
-        'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when',
-        'when\'s', 'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why',
-        'why\'s', 'with', 'won\'t', 'would', 'wouldn\'t', 'you', 'you\'d', 'you\'ll',
-        'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves'
+        "a",
+        "about",
+        "above",
+        "after",
+        "again",
+        "against",
+        "all",
+        "am",
+        "an",
+        "and",
+        "any",
+        "are",
+        "aren't",
+        "as",
+        "at",
+        "be",
+        "because",
+        "been",
+        "before",
+        "being",
+        "below",
+        "between",
+        "both",
+        "but",
+        "by",
+        "can't",
+        "cannot",
+        "could",
+        "couldn't",
+        "did",
+        "didn't",
+        "do",
+        "does",
+        "doesn't",
+        "doing",
+        "don't",
+        "down",
+        "during",
+        "each",
+        "few",
+        "for",
+        "from",
+        "further",
+        "had",
+        "hadn't",
+        "has",
+        "hasn't",
+        "have",
+        "haven't",
+        "having",
+        "he",
+        "he'd",
+        "he'll",
+        "he's",
+        "her",
+        "here",
+        "here's",
+        "hers",
+        "herself",
+        "him",
+        "himself",
+        "his",
+        "how",
+        "how's",
+        "i",
+        "i'd",
+        "i'll",
+        "i'm",
+        "i've",
+        "if",
+        "in",
+        "into",
+        "is",
+        "isn't",
+        "it",
+        "it's",
+        "its",
+        "itself",
+        "let's",
+        "me",
+        "more",
+        "most",
+        "mustn't",
+        "my",
+        "myself",
+        "no",
+        "nor",
+        "not",
+        "of",
+        "off",
+        "on",
+        "once",
+        "only",
+        "or",
+        "other",
+        "ought",
+        "our",
+        "ours",
+        "ourselves",
+        "out",
+        "over",
+        "own",
+        "same",
+        "shan't",
+        "she",
+        "she'd",
+        "she'll",
+        "she's",
+        "should",
+        "shouldn't",
+        "so",
+        "some",
+        "such",
+        "than",
+        "that",
+        "that's",
+        "the",
+        "their",
+        "theirs",
+        "them",
+        "themselves",
+        "then",
+        "there",
+        "there's",
+        "these",
+        "they",
+        "they'd",
+        "they'll",
+        "they're",
+        "they've",
+        "this",
+        "those",
+        "through",
+        "to",
+        "too",
+        "under",
+        "until",
+        "up",
+        "very",
+        "was",
+        "wasn't",
+        "we",
+        "we'd",
+        "we'll",
+        "we're",
+        "we've",
+        "were",
+        "weren't",
+        "what",
+        "what's",
+        "when",
+        "when's",
+        "where",
+        "where's",
+        "which",
+        "while",
+        "who",
+        "who's",
+        "whom",
+        "why",
+        "why's",
+        "with",
+        "won't",
+        "would",
+        "wouldn't",
+        "you",
+        "you'd",
+        "you'll",
+        "you're",
+        "you've",
+        "your",
+        "yours",
+        "yourself",
+        "yourselves",
     }
-    
-    def __init__(self, pattern=r'[\s\W\d]+', stop_words=None):
+
+    def __init__(self, pattern=r"[\s\W\d]+", stop_words=None):
         """
         Initialize the tokenizer with a regex pattern and stop words.
-        
+
         Args:
             pattern (str): Regex pattern to split text on. Default pattern splits on
                           whitespace, non-word characters, and digits.
@@ -47,30 +202,30 @@ class Tokenizer:
         """
         self.pattern = pattern
         self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
-    
+
     def tokenize(self, text):
         """
         Tokenize the input text and remove stop words.
-        
+
         Args:
             text (str): Text to tokenize
-            
+
         Returns:
             list: List of tokens with stop words removed
         """
         if not text:
             return []
-            
+
         # Convert to lowercase
         text = text.lower()
-        
+
         # Split on the pattern and filter out empty strings
         tokens = [token for token in re.split(self.pattern, text) if token]
-        
+
         # Remove stop words if any are specified
         if self.stop_words:
             tokens = [token for token in tokens if token not in self.stop_words]
-        
+
         return tokens
 
 
@@ -101,17 +256,17 @@ class AppendableIndex:
         """
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields
-        
+
         # Initialize data structures
         self.docs = []
         self.total_docs = 0
         self.inverted_index = {field: defaultdict(list) for field in text_fields}
         self.doc_frequencies = {field: defaultdict(int) for field in text_fields}
         self.keyword_data = {field: [] for field in keyword_fields}
-        
+
         # Store vocabulary for each field
         self.vocabularies = {field: set() for field in text_fields}
-        
+
         # Initialize tokenizer with stop words
         self.tokenizer = Tokenizer(stop_words=stop_words)
 
@@ -124,26 +279,28 @@ class AppendableIndex:
         tokens = self._process_text(text)
         if not tokens:  # Skip empty documents
             return
-            
+
         for token in tokens:
             self.inverted_index[field][token].append(doc_id)
-            self.doc_frequencies[field][token] = len(set(self.inverted_index[field][token]))
+            self.doc_frequencies[field][token] = len(
+                set(self.inverted_index[field][token])
+            )
             self.vocabularies[field].add(token)
 
     def _calculate_tfidf(self, field, token, doc_id):
         """Calculate TF-IDF score for a token in a document."""
         # Term frequency (TF)
-        doc_tokens = self._process_text(self.docs[doc_id].get(field, ''))
+        doc_tokens = self._process_text(self.docs[doc_id].get(field, ""))
         if not doc_tokens:  # Handle empty documents
             return 0
-            
+
         # Use sublinear TF scaling like scikit-learn
         tf = 1 + math.log(doc_tokens.count(token)) if doc_tokens.count(token) > 0 else 0
-        
+
         # Inverse document frequency (IDF)
         df = self.doc_frequencies[field][token]
         idf = math.log((self.total_docs + 1) / (df + 1)) + 1
-        
+
         return tf * idf
 
     def _get_matching_documents(self, field, tokens):
@@ -160,21 +317,25 @@ class AppendableIndex:
         field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
         if not field_tokens:
             return None, None
-            
+
         # Calculate query vector
         query_vector = np.zeros(len(field_tokens))
         for i, token in enumerate(field_tokens):
             # Calculate TF-IDF for query token
-            tf = 1 + math.log(query_tokens.count(token)) if query_tokens.count(token) > 0 else 0
+            tf = (
+                1 + math.log(query_tokens.count(token))
+                if query_tokens.count(token) > 0
+                else 0
+            )
             df = self.doc_frequencies[field][token]
             idf = math.log((self.total_docs + 1) / (df + 1)) + 1
             query_vector[i] = tf * idf
-        
+
         # L2 normalize the query vector
         query_norm = np.linalg.norm(query_vector)
         if query_norm > 0:
             query_vector = query_vector / query_norm
-            
+
         return query_vector, field_tokens
 
     def _create_document_vectors(self, field, field_tokens, matching_docs):
@@ -182,7 +343,7 @@ class AppendableIndex:
         doc_vectors = {}
         for doc_id in matching_docs:
             doc_vector = np.zeros(len(field_tokens))
-            doc_tokens = self._process_text(self.docs[doc_id].get(field, ''))
+            doc_tokens = self._process_text(self.docs[doc_id].get(field, ""))
             if doc_tokens:
                 # Calculate TF-IDF for each matching token
                 for i, token in enumerate(field_tokens):
@@ -216,19 +377,19 @@ class AppendableIndex:
         # Get number of non-zero scores
         non_zero_mask = scores > 0
         non_zero_count = np.sum(non_zero_mask)
-        
+
         if non_zero_count == 0:
             return []
-            
+
         # Ensure num_results doesn't exceed the number of non-zero scores
         num_results = min(num_results, non_zero_count)
-        
+
         # Get indices of non-zero scores
         non_zero_indices = np.where(non_zero_mask)[0]
-        
+
         # Sort non-zero scores in descending order
         sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
-        
+
         # Take top num_results
         return sorted_indices[:num_results]
 
@@ -241,23 +402,25 @@ class AppendableIndex:
         """
         self.docs = docs
         self.total_docs = len(docs)
-        
+
         # Process each document
         for doc_id, doc in enumerate(docs):
             # Update inverted index for text fields
             for field in self.text_fields:
-                self._update_inverted_index(doc_id, field, doc.get(field, ''))
-            
+                self._update_inverted_index(doc_id, field, doc.get(field, ""))
+
             # Collect keyword data
             for field in self.keyword_fields:
-                self.keyword_data[field].append(doc.get(field, ''))
-        
+                self.keyword_data[field].append(doc.get(field, ""))
+
         # Only check vocabulary if we have documents
         if self.docs:
             has_vocabulary = any(len(vocab) > 0 for vocab in self.vocabularies.values())
             if not has_vocabulary:
-                raise ValueError("empty vocabulary; perhaps the documents only contain stop words")
-        
+                raise ValueError(
+                    "empty vocabulary; perhaps the documents only contain stop words"
+                )
+
         return self
 
     def append(self, doc):
@@ -270,18 +433,20 @@ class AppendableIndex:
         doc_id = len(self.docs)
         self.docs.append(doc)
         self.total_docs += 1
-        
+
         # Update inverted index for text fields
         for field in self.text_fields:
-            self._update_inverted_index(doc_id, field, doc.get(field, ''))
-        
+            self._update_inverted_index(doc_id, field, doc.get(field, ""))
+
         # Update keyword data
         for field in self.keyword_fields:
-            self.keyword_data[field].append(doc.get(field, ''))
-        
+            self.keyword_data[field].append(doc.get(field, ""))
+
         return self
 
-    def search(self, query, filter_dict={}, boost_dict={}, num_results=10, output_ids=False):
+    def search(
+        self, query, filter_dict={}, boost_dict={}, num_results=10, output_ids=False
+    ):
         """
         Searches the index with the given query, filters, and boost parameters.
 
@@ -298,13 +463,13 @@ class AppendableIndex:
         """
         if not self.docs:
             return []
-            
+
         query_tokens = self._process_text(query)
         if not query_tokens:  # Handle empty queries
             return []
-        
+
         scores = np.zeros(len(self.docs))
-        
+
         # Calculate scores for each text field
         for field in self.text_fields:
             # Create query vector
@@ -316,7 +481,9 @@ class AppendableIndex:
             matching_docs = self._get_matching_documents(field, field_tokens)
 
             # Create document vectors
-            doc_vectors = self._create_document_vectors(field, field_tokens, matching_docs)
+            doc_vectors = self._create_document_vectors(
+                field, field_tokens, matching_docs
+            )
 
             # Calculate field scores
             field_scores = self._calculate_field_scores(query_vector, doc_vectors)
@@ -324,7 +491,7 @@ class AppendableIndex:
             # Apply boost
             boost = boost_dict.get(field, 1)
             scores += field_scores * boost
-        
+
         # Apply keyword filters
         scores = self._apply_keyword_filters(scores, filter_dict)
 
@@ -332,5 +499,5 @@ class AppendableIndex:
         top_indices = self._get_top_results(scores, num_results)
 
         if output_ids:
-            return [{**self.docs[i], '_id': int(i)} for i in top_indices]
+            return [{**self.docs[i], "_id": int(i)} for i in top_indices]
         return [self.docs[i] for i in top_indices]

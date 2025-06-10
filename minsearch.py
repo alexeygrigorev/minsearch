@@ -6,10 +6,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 import warnings
+
 warnings.warn(
     "Now minsearch is installable via pip: 'pip install minsearch'. "
     "Remove the downloaded file and re-install it with pip.",
-    UserWarning
+    UserWarning,
 )
 
 
@@ -38,7 +39,9 @@ class Index:
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields
 
-        self.vectorizers = {field: TfidfVectorizer(**vectorizer_params) for field in text_fields}
+        self.vectorizers = {
+            field: TfidfVectorizer(**vectorizer_params) for field in text_fields
+        }
         self.keyword_df = None
         self.text_matrices = {}
         self.docs = []
@@ -54,12 +57,12 @@ class Index:
         keyword_data = {field: [] for field in self.keyword_fields}
 
         for field in self.text_fields:
-            texts = [doc.get(field, '') for doc in docs]
+            texts = [doc.get(field, "") for doc in docs]
             self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
 
         for doc in docs:
             for field in self.keyword_fields:
-                keyword_data[field].append(doc.get(field, ''))
+                keyword_data[field].append(doc.get(field, ""))
 
         self.keyword_df = pd.DataFrame(keyword_data)
 
@@ -78,7 +81,10 @@ class Index:
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
         """
-        query_vecs = {field: self.vectorizers[field].transform([query]) for field in self.text_fields}
+        query_vecs = {
+            field: self.vectorizers[field].transform([query])
+            for field in self.text_fields
+        }
         scores = np.zeros(len(self.docs))
 
         # Compute cosine similarity for each text field and apply boost
