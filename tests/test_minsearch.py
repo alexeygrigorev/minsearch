@@ -422,3 +422,26 @@ def test_boost_affects_ranking():
     python_mentions = [doc["description"].lower().count("python") for doc in results_desc_boost]
     assert python_mentions[0] == max(python_mentions), "Description boost should rank documents with more Python mentions higher"
 
+
+def test_output_ids(text_fields, keyword_fields, sample_docs):
+    """Test that output_ids parameter works correctly."""
+    index = Index(text_fields, keyword_fields)
+    index.fit(sample_docs)
+    
+    # Test without output_ids
+    results = index.search("python")
+    assert len(results) > 0
+    assert isinstance(results[0], dict)
+    assert '_id' not in results[0]
+    
+    # Test with output_ids
+    results_with_ids = index.search("python", output_ids=True)
+    assert len(results_with_ids) > 0
+    assert isinstance(results_with_ids[0], dict)
+    assert '_id' in results_with_ids[0]
+    assert isinstance(results_with_ids[0]['_id'], int)
+    
+    # Test that IDs match document positions
+    for doc in results_with_ids:
+        assert doc == {**sample_docs[doc['_id']], '_id': doc['_id']}
+

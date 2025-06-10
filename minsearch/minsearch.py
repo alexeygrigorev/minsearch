@@ -81,7 +81,7 @@ class Index:
 
         return self
 
-    def search(self, query, filter_dict={}, boost_dict={}, num_results=10):
+    def search(self, query, filter_dict={}, boost_dict={}, num_results=10, output_ids=False):
         """
         Searches the index with the given query, filters, and boost parameters.
 
@@ -90,9 +90,11 @@ class Index:
             filter_dict (dict): Dictionary of keyword fields to filter by. Keys are field names and values are the values to filter by.
             boost_dict (dict): Dictionary of boost scores for text fields. Keys are field names and values are the boost scores.
             num_results (int): The number of top results to return. Defaults to 10.
+            output_ids (bool): If True, adds an '_id' field to each document containing its index. Defaults to False.
 
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
+                         If output_ids is True, each document will have an additional '_id' field.
         """
         if not self.docs:
             return []
@@ -132,4 +134,6 @@ class Index:
         top_indices = sorted_indices[:num_results]
         
         # Return corresponding documents
+        if output_ids:
+            return [{**self.docs[i], '_id': int(i)} for i in top_indices]
         return [self.docs[i] for i in top_indices]
