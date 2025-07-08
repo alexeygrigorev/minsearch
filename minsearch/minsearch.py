@@ -19,7 +19,7 @@ class Index:
         docs (list): List of documents indexed.
     """
 
-    def __init__(self, text_fields, keyword_fields, vectorizer_params={}):
+    def __init__(self, text_fields, keyword_fields, vectorizer_params=None):
         """
         Initializes the Index with specified text and keyword fields.
 
@@ -30,6 +30,8 @@ class Index:
         """
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields
+        if vectorizer_params is None:
+            vectorizer_params = {}
 
         # Set default vectorizer parameters to ensure we always have terms
         default_params = {
@@ -81,7 +83,7 @@ class Index:
 
         return self
 
-    def search(self, query, filter_dict={}, boost_dict={}, num_results=10, output_ids=False):
+    def search(self, query, filter_dict=None, boost_dict=None, num_results=10, output_ids=False):
         """
         Searches the index with the given query, filters, and boost parameters.
 
@@ -96,6 +98,11 @@ class Index:
             list of dict: List of documents matching the search criteria, ranked by relevance.
                          If output_ids is True, each document will have an additional '_id' field.
         """
+        if filter_dict is None:
+            filter_dict = {}
+        if boost_dict is None:
+            boost_dict = {}
+            
         if not self.docs:
             return []
             

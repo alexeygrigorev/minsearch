@@ -27,7 +27,7 @@ class Index:
         docs (list): List of documents indexed.
     """
 
-    def __init__(self, text_fields, keyword_fields, vectorizer_params={}):
+    def __init__(self, text_fields, keyword_fields, vectorizer_params=None):
         """
         Initializes the Index with specified text and keyword fields.
 
@@ -38,6 +38,8 @@ class Index:
         """
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields
+        if vectorizer_params is None:
+            vectorizer_params = {}
 
         self.vectorizers = {
             field: TfidfVectorizer(**vectorizer_params) for field in text_fields
@@ -68,7 +70,7 @@ class Index:
 
         return self
 
-    def search(self, query, filter_dict={}, boost_dict={}, num_results=10):
+    def search(self, query, filter_dict=None, boost_dict=None, num_results=10):
         """
         Searches the index with the given query, filters, and boost parameters.
 
@@ -81,6 +83,11 @@ class Index:
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
         """
+        if filter_dict is None:
+            filter_dict = {}
+        if boost_dict is None:
+            boost_dict = {}
+
         query_vecs = {
             field: self.vectorizers[field].transform([query])
             for field in self.text_fields
