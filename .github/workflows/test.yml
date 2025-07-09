@@ -14,7 +14,7 @@ jobs:
     
     strategy:
       matrix:
-        python-version: [3.8, 3.9, 3.10, 3.11]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     
     steps:
     - uses: actions/checkout@v4
@@ -31,6 +31,8 @@ jobs:
     
     - name: Install dependencies
       run: |
+        # Temporarily update Pipfile to allow current Python version
+        sed -i "s/python_version = \"3.12\"/python_version = \"${{ matrix.python-version }}\"/" Pipfile
         pipenv install --dev
     
     - name: Run tests
