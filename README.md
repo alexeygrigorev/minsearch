@@ -23,22 +23,11 @@ pip install minsearch
 
 ## Environment setup
 
-To run it locally, make sure you have the required dependencies installed:
-
-```bash
-pip install pandas scikit-learn
-```
-
-Alternatively, use uv:
+For development purposes, use uv:
 
 ```bash
 # Install uv if you haven't already
 pip install uv
-
-# Install dependencies
-uv sync
-
-# Or install with dev dependencies
 uv sync --extra dev
 ```
 
