@@ -1,36 +1,48 @@
-.PHONY: setup test clean publish-test publish clean-build
+.PHONY: setup test clean publish-test publish clean-build install install-dev shell list notebook build check
 
 # Development setup
 setup:
-	pipenv install --dev
+	uv sync --extra dev
 
 # Run tests
 test:
-	pipenv run pytest
-
-# Start Jupyter notebook
-notebook:
-	pipenv run jupyter notebook
+	uv run pytest
 
 # Build package
 build:
-	pipenv run python -m build
+	uv run python -m build
 
 # Check built packages
 check:
-	pipenv run twine check dist/*
+	uv run twine check dist/*
 
 # Publish to test PyPI
 publish-test:
-	pipenv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	uv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
 # Publish to PyPI
 publish:
-	pipenv run twine upload dist/*
+	uv run twine upload dist/*
 
 # Clean build artifacts
 clean:
 	rm -rf build/ dist/ minsearch.egg-info/ .pytest_cache/ __pycache__/ .coverage htmlcov/
 
 # Clean and rebuild
-clean-build: clean build 
+clean-build: clean build
+
+# Install dependencies (production only)
+install:
+	uv sync
+
+# Install dependencies (with dev extras)
+install-dev:
+	uv sync --extra dev
+
+# Run shell with uv environment
+shell:
+	uv shell
+
+# List installed packages
+list:
+	uv pip list 

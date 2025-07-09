@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "minsearch"
+dynamic = ["version"]
+description = "Minimalistic text search engine that uses sklearn and pandas"
+readme = "README.md"
+license = {text = "WTFPL"}
+authors = [
+    {name = "Alexey Grigorev", email = "alexey@datatalks.club"},
+]
+maintainers = [
+    {name = "Alexey Grigorev", email = "alexey@datatalks.club"},
+]
+keywords = ["search", "text-search", "tf-idf", "cosine-similarity"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: Other/Proprietary License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "twine",
+    "build",
+    "pytest",
+]
+
+[project.urls]
+Homepage = "https://github.com/alexeygrigorev/minsearch"
+Repository = "https://github.com/alexeygrigorev/minsearch"
+Issues = "https://github.com/alexeygrigorev/minsearch/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["minsearch"]
+
+[tool.hatch.version]
+path = "minsearch/__version__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short" 

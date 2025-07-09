@@ -29,10 +29,17 @@ To run it locally, make sure you have the required dependencies installed:
 pip install pandas scikit-learn
 ```
 
-Alternatively, use pipenv:
+Alternatively, use uv:
 
 ```bash
-pipenv install --dev
+# Install uv if you haven't already
+pip install uv
+
+# Install dependencies
+uv sync
+
+# Or install with dev dependencies
+uv sync --extra dev
 ```
 
 ## Usage
@@ -150,7 +157,7 @@ The repository includes an interactive Jupyter notebook (`minsearch_example.ipyn
 To run the notebook:
 
 ```bash
-pipenv run jupyter notebook
+uv run jupyter notebook
 ```
 
 Then open `minsearch_example.ipynb` in your browser.
@@ -160,34 +167,34 @@ Then open `minsearch_example.ipynb` in your browser.
 ### Running Tests
 
 ```bash
-pipenv run pytest
+uv run pytest
 ```
 
 ### Building and Publishing
 
 1. Install development dependencies:
 ```bash
-pipenv install --dev twine build
+uv sync --extra dev
 ```
 
 2. Build the package:
 ```bash
-pipenv run python -m build
+uv run python -m build
 ```
 
 3. Check the packages:
 ```bash
-pipenv run twine check dist/*
+uv run twine check dist/*
 ```
 
 4. Upload to test PyPI:
 ```bash
-pipenv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+uv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 ```
 
 5. Upload to PyPI:
 ```bash
-pipenv run twine upload dist/*
+uv run twine upload dist/*
 ```
 
 6. Clean up:
