@@ -445,7 +445,7 @@ class AppendableIndex:
         return self
 
     def search(
-        self, query, filter_dict={}, boost_dict={}, num_results=10, output_ids=False
+        self, query, filter_dict=None, boost_dict=None, num_results=10, output_ids=False
     ):
         """
         Searches the index with the given query, filters, and boost parameters.
@@ -461,6 +461,11 @@ class AppendableIndex:
             list of dict: List of documents matching the search criteria, ranked by relevance.
                          If output_ids is True, each document will have an additional '_id' field.
         """
+        if filter_dict is None:
+            filter_dict = {}
+        if boost_dict is None:
+            boost_dict = {}
+            
         if not self.docs:
             return []
 
