@@ -1,15 +1,17 @@
 # minsearch
 
-A minimalistic text search engine that uses TF-IDF and cosine similarity for text fields and exact matching for keyword fields. The library provides two implementations:
+A minimalistic search engine that provides both text-based and vector-based search capabilities. The library provides three implementations:
 
-1. `Index`: A basic search index using scikit-learn's TF-IDF vectorizer
+1. `Index`: A basic search index using scikit-learn's TF-IDF vectorizer for text fields
 2. `AppendableIndex`: An appendable search index using an inverted index implementation that allows for incremental document addition
+3. `VectorSearch`: A vector search index using cosine similarity for pre-computed vectors
 
 ## Features
 
 - Text field indexing with TF-IDF and cosine similarity
+- Vector search with cosine similarity for pre-computed embeddings
 - Keyword field filtering with exact matching
-- Field boosting for fine-tuning search relevance
+- Field boosting for fine-tuning search relevance (text-based search)
 - Stop word removal and custom tokenization
 - Support for incremental document addition (AppendableIndex)
 - Customizable tokenizer patterns and stop words
@@ -95,6 +97,32 @@ index = AppendableIndex(
 )
 ```
 
+### Vector Search with VectorSearch
+
+```python
+from minsearch import VectorSearch
+import numpy as np
+
+# Create sample vectors and payload documents
+vectors = np.random.rand(100, 768)  # 100 documents, 768-dimensional vectors
+payload = [
+    {"id": 1, "title": "Python Tutorial", "category": "programming", "level": "beginner"},
+    {"id": 2, "title": "Data Science Guide", "category": "data", "level": "intermediate"},
+    {"id": 3, "title": "Machine Learning Basics", "category": "ai", "level": "advanced"},
+    # ... more documents
+]
+
+# Create and fit the vector search index
+index = VectorSearch(keyword_fields=["category", "level"])
+index.fit(vectors, payload)
+
+# Search with a query vector
+query_vector = np.random.rand(768)  # 768-dimensional query vector
+filter_dict = {"category": "programming", "level": "beginner"}
+
+results = index.search(query_vector, filter_dict=filter_dict, num_results=5)
+```
+
 ### Advanced Features
 
 #### Custom Tokenizer Pattern
@@ -110,7 +138,7 @@ index = AppendableIndex(
 )
 ```
 
-#### Field Boosting
+#### Field Boosting (Text-based Search)
 
 ```python
 # Boost certain fields to increase their importance in search
@@ -196,6 +224,7 @@ rm -r build/ dist/ minsearch.egg-info/
 - `minsearch/`: Main package directory
   - `minsearch.py`: Core Index implementation using scikit-learn
   - `append.py`: AppendableIndex implementation with inverted index
+  - `vector.py`: VectorSearch implementation using cosine similarity
 - `tests/`: Test suite
 - `minsearch_example.ipynb`: Example notebook
 - `setup.py`: Package configuration
