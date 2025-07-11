@@ -39,8 +39,12 @@ jobs:
     
     - name: Build package
       run: |
-        uv run python -m build
+        uv run hatch build
     
     - name: Check built package
       run: |
-        uv run twine check dist/* 
+        uv run hatch build
+        ls -la dist/
+        # Verify both wheel and sdist were created
+        test -f dist/*.whl
+        test -f dist/*.tar.gz 

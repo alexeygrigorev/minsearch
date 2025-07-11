@@ -36,7 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "twine",
+    "hatch",
     "build",
     "pytest",
 ]

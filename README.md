@@ -196,27 +196,56 @@ uv sync --extra dev
 
 2. Build the package:
 ```bash
-uv run python -m build
+uv run hatch build
 ```
 
-3. Check the packages:
+3. Publish to test PyPI:
 ```bash
-uv run twine check dist/*
+uv run hatch publish --repo test
 ```
 
-4. Upload to test PyPI:
+4. Publish to PyPI:
 ```bash
-uv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+uv run hatch publish
 ```
 
-5. Upload to PyPI:
+5. Clean up:
 ```bash
-uv run twine upload dist/*
+rm -r dist/
 ```
 
-6. Clean up:
+Note: For Hatch publishing, you'll need to configure your PyPI credentials in `~/.pypirc` or use environment variables.
+
+## PyPI Credentials Setup
+
+Create a `.pypirc` file in your home directory with your PyPI credentials:
+
+```ini
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+repository = https://upload.pypi.org/legacy/
+username = __token__
+password = pypi-your-main-api-token-here
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = pypi-your-test-api-token-here
+```
+
+**Important Notes:**
+- Use `__token__` as the username for API tokens
+- Get your tokens from [PyPI](https://pypi.org/manage/account/token/) and [Test PyPI](https://test.pypi.org/manage/account/token/)
+- Set file permissions: `chmod 600 ~/.pypirc`
+
+**Alternative: Environment Variables**
 ```bash
-rm -r build/ dist/ minsearch.egg-info/
+export HATCH_INDEX_USER=__token__
+export HATCH_INDEX_AUTH=your-pypi-token
 ```
 
 ## Project Structure
