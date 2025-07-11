@@ -36,6 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "requests",
     "hatch",
     "build",
     "pytest",
