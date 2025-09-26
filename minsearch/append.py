@@ -244,25 +244,25 @@ class AppendableIndex:
         total_docs (int): Total number of documents in the index.
     """
 
-    def __init__(self, text_fields, keyword_fields, stop_words=None):
+    def __init__(self, text_fields, keyword_fields=None, stop_words=None):
         """
         Initializes the AppendableIndex with specified text and keyword fields.
 
         Args:
             text_fields (list): List of text field names to index.
-            keyword_fields (list): List of keyword field names to index.
+            keyword_fields (list, optional): List of keyword field names to index. Defaults to empty list.
             stop_words (set or None): Set of stop words to remove. If None, uses default
                                     English stop words. If empty set, no stop words are removed.
         """
         self.text_fields = text_fields
-        self.keyword_fields = keyword_fields
+        self.keyword_fields = keyword_fields if keyword_fields is not None else []
 
         # Initialize data structures
         self.docs = []
         self.total_docs = 0
         self.inverted_index = {field: defaultdict(list) for field in text_fields}
         self.doc_frequencies = {field: defaultdict(int) for field in text_fields}
-        self.keyword_data = {field: [] for field in keyword_fields}
+        self.keyword_data = {field: [] for field in self.keyword_fields}
 
         # Store vocabulary for each field
         self.vocabularies = {field: set() for field in text_fields}
