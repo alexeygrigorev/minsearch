@@ -27,17 +27,17 @@ class Index:
         docs (list): List of documents indexed.
     """
 
-    def __init__(self, text_fields, keyword_fields, vectorizer_params=None):
+    def __init__(self, text_fields, keyword_fields=None, vectorizer_params=None):
         """
         Initializes the Index with specified text and keyword fields.
 
         Args:
             text_fields (list): List of text field names to index.
-            keyword_fields (list): List of keyword field names to index.
+            keyword_fields (list, optional): List of keyword field names to index. Defaults to empty list.
             vectorizer_params (dict): Optional parameters to pass to TfidfVectorizer.
         """
         self.text_fields = text_fields
-        self.keyword_fields = keyword_fields
+        self.keyword_fields = keyword_fields if keyword_fields is not None else []
         if vectorizer_params is None:
             vectorizer_params = {}
 
