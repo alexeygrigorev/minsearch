@@ -12,14 +12,14 @@ class VectorSearch:
     similarity search with keyword filtering and boosting capabilities.
     """
     
-    def __init__(self, keyword_fields):
+    def __init__(self, keyword_fields=None):
         """
         Initialize the VectorSearch index.
         
         Args:
-            keyword_fields (list): List of keyword field names to index for exact matching.
+            keyword_fields (list, optional): List of keyword field names to index for exact matching. Defaults to empty list.
         """
-        self.keyword_fields = keyword_fields
+        self.keyword_fields = keyword_fields if keyword_fields is not None else []
         self.vectors = None  # 2D numpy array of vectors
         self.keyword_df = None  # DataFrame containing keyword field data
         self.docs = []  # List of documents (payload)
