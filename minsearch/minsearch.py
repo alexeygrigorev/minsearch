@@ -64,7 +64,7 @@ class Index:
             return self
 
         for field in self.text_fields:
-            texts = [doc.get(field, '') for doc in docs]
+            texts = [doc.get(field, '') or '' for doc in docs]
             try:
                 self.text_matrices[field] = self.vectorizers[field].fit_transform(texts)
             except ValueError as e:

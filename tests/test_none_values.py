@@ -31,6 +31,13 @@ def docs_with_none():
             'assignee_login': None,
             'state': 'open',
             'body': 'Another tools with no assignee'
+        },
+        {
+            'url': 'https://api.github.com/repos/pydantic/pydantic-ai/issues/2929',
+            'user_login': 'TestUser',
+            'assignee_login': None,
+            'state': 'open',
+            'body': None
         }
     ]
 
@@ -46,10 +53,24 @@ class TestIndexWithNoneValues:
         )
         
         index.fit(docs_with_none)
-        assert len(index.docs) == 3
+        assert len(index.docs) == 4
         
         results = index.search("tools")
         assert len(results) > 0
+    
+    def test_index_with_none_text_field(self, docs_with_none):
+        """Test Index can handle None values in text fields."""
+        index = Index(
+            text_fields=["body"],
+            keyword_fields=["assignee_login", "state"]
+        )
+        
+        index.fit(docs_with_none)
+        assert len(index.docs) == 4
+        
+        # Should be able to search even with None text values
+        results = index.search("tools")
+        assert len(results) >= 2
 
     def test_index_search_with_none_filter(self, docs_with_none):
         """Test Index search with None value in filter."""
@@ -77,10 +98,24 @@ class TestAppendableIndexWithNoneValues:
         )
         
         index.fit(docs_with_none)
-        assert len(index.docs) == 3
+        assert len(index.docs) == 4
         
         results = index.search("tools")
         assert len(results) > 0
+    
+    def test_appendable_index_with_none_text_field(self, docs_with_none):
+        """Test AppendableIndex can handle None values in text fields."""
+        index = AppendableIndex(
+            text_fields=["body"],
+            keyword_fields=["assignee_login", "state"]
+        )
+        
+        index.fit(docs_with_none)
+        assert len(index.docs) == 4
+        
+        # Should be able to search even with None text values
+        results = index.search("tools")
+        assert len(results) >= 2
 
     def test_appendable_index_search_with_none_filter(self, docs_with_none):
         """Test AppendableIndex search with None value in filter."""
@@ -120,6 +155,6 @@ class TestVectorSearchWithNoneValues:
         
         query_vector = np.random.rand(10)
         results = index.search(query_vector, filter_dict={"assignee_login": None}, num_results=10)
-        assert len(results) == 2
+        assert len(results) == 3
         for result in results:
             assert result['assignee_login'] is None
