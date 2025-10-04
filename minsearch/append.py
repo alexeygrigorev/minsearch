@@ -368,7 +368,10 @@ class AppendableIndex:
         """Apply keyword filters to the scores."""
         for field, value in filter_dict.items():
             if field in self.keyword_fields:
-                mask = np.array([val == value for val in self.keyword_data[field]])
+                if value is None:
+                    mask = np.array([val is None for val in self.keyword_data[field]])
+                else:
+                    mask = np.array([val == value for val in self.keyword_data[field]])
                 scores = scores * mask
         return scores
 
@@ -411,7 +414,7 @@ class AppendableIndex:
 
             # Collect keyword data
             for field in self.keyword_fields:
-                self.keyword_data[field].append(doc.get(field, ""))
+                self.keyword_data[field].append(doc.get(field))
 
         # Only check vocabulary if we have documents
         if self.docs:
@@ -440,7 +443,7 @@ class AppendableIndex:
 
         # Update keyword data
         for field in self.keyword_fields:
-            self.keyword_data[field].append(doc.get(field, ""))
+            self.keyword_data[field].append(doc.get(field))
 
         return self
 

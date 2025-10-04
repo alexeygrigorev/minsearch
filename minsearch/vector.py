@@ -42,7 +42,7 @@ class VectorSearch:
         keyword_data = {field: [] for field in self.keyword_fields}
         for doc in payload:
             for field in self.keyword_fields:
-                keyword_data[field].append(doc.get(field, ''))
+                keyword_data[field].append(doc.get(field))
         self.keyword_df = pd.DataFrame(keyword_data)
         
         return self
@@ -78,7 +78,10 @@ class VectorSearch:
         # Apply keyword filters
         for field, value in filter_dict.items():
             if field in self.keyword_fields:
-                mask = self.keyword_df[field] == value
+                if value is None:
+                    mask = self.keyword_df[field].isna()
+                else:
+                    mask = self.keyword_df[field] == value
                 scores = scores * mask.to_numpy()
         
         # Get number of non-zero scores

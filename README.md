@@ -214,6 +214,12 @@ uv run hatch publish
 rm -r dist/
 ```
 
+Or run 
+
+```bash
+python publish.py
+```
+
 Note: For Hatch publishing, you'll need to configure your PyPI credentials in `~/.pypirc` or use environment variables.
 
 ## PyPI Credentials Setup
