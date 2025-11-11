@@ -13,7 +13,7 @@ A minimalistic search engine that provides both text-based and vector-based sear
 - Keyword field filtering with exact matching
 - Field boosting for fine-tuning search relevance (text-based search)
 - Stop word removal and custom tokenization
-- Support for incremental document addition (AppendableIndex)
+- Support for incremental document addition (AppendableIndex and VectorSearch)
 - Customizable tokenizer patterns and stop words
 - Efficient search with filtering and boosting
 
@@ -121,6 +121,35 @@ query_vector = np.random.rand(768)  # 768-dimensional query vector
 filter_dict = {"category": "programming", "level": "beginner"}
 
 results = index.search(query_vector, filter_dict=filter_dict, num_results=5)
+```
+
+#### Incremental Vector Search
+
+VectorSearch now supports appending vectors incrementally:
+
+```python
+from minsearch import VectorSearch
+import numpy as np
+
+# Create the index
+index = VectorSearch(keyword_fields=["category", "level"])
+
+# Append a single vector
+vector = np.random.rand(768)
+doc = {"id": 1, "title": "Python Tutorial", "category": "programming", "level": "beginner"}
+index.append(vector, doc)
+
+# Append multiple vectors in batch
+vectors = np.random.rand(10, 768)
+payload = [
+    {"id": i+2, "title": f"Document {i+2}", "category": "data", "level": "intermediate"}
+    for i in range(10)
+]
+index.append_batch(vectors, payload)
+
+# Search works the same way
+query_vector = np.random.rand(768)
+results = index.search(query_vector, num_results=5)
 ```
 
 ### Advanced Features

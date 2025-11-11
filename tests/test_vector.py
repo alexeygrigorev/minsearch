@@ -168,3 +168,199 @@ class TestVectorSearch:
         # Vector 4 should be last (cosine similarity = 0.2)
         assert results[4]["id"] == 4
         assert results[4]["title"] == "Least Similar"
+    
+    def test_append_single_vector(self):
+        """Test appending a single vector to the index."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create initial vectors and payload
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "category": "programming"},
+            {"id": 2, "title": "Doc 2", "category": "data"},
+            {"id": 3, "title": "Doc 3", "category": "ai"}
+        ]
+        
+        # Create and fit index
+        index = VectorSearch(keyword_fields=["category"])
+        index.fit(vectors, payload)
+        
+        # Append a new vector
+        new_vector = np.random.rand(10)
+        new_doc = {"id": 4, "title": "Doc 4", "category": "programming"}
+        index.append(new_vector, new_doc)
+        
+        # Verify the index now has 4 vectors
+        assert index.vectors.shape[0] == 4
+        assert len(index.docs) == 4
+        assert len(index.keyword_df) == 4
+        
+        # Search and verify the new document is searchable
+        query_vector = new_vector
+        results = index.search(query_vector, num_results=1)
+        assert len(results) == 1
+        assert results[0]["id"] == 4
+        assert results[0]["title"] == "Doc 4"
+    
+    def test_append_to_empty_index(self):
+        """Test appending to an empty index (without fit)."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create empty index
+        index = VectorSearch(keyword_fields=["category"])
+        
+        # Append vectors one by one
+        for i in range(3):
+            vector = np.random.rand(10)
+            doc = {"id": i+1, "title": f"Doc {i+1}", "category": "test"}
+            index.append(vector, doc)
+        
+        # Verify the index has 3 vectors
+        assert index.vectors.shape[0] == 3
+        assert len(index.docs) == 3
+        assert len(index.keyword_df) == 3
+        
+        # Search should work
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, num_results=2)
+        assert len(results) == 2
+    
+    def test_append_batch(self):
+        """Test appending multiple vectors in batch."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create initial vectors and payload
+        initial_vectors = np.random.rand(2, 10)
+        initial_payload = [
+            {"id": 1, "title": "Doc 1", "category": "programming"},
+            {"id": 2, "title": "Doc 2", "category": "data"}
+        ]
+        
+        # Create and fit index
+        index = VectorSearch(keyword_fields=["category"])
+        index.fit(initial_vectors, initial_payload)
+        
+        # Append a batch of new vectors
+        new_vectors = np.random.rand(3, 10)
+        new_payload = [
+            {"id": 3, "title": "Doc 3", "category": "ai"},
+            {"id": 4, "title": "Doc 4", "category": "programming"},
+            {"id": 5, "title": "Doc 5", "category": "data"}
+        ]
+        index.append_batch(new_vectors, new_payload)
+        
+        # Verify the index now has 5 vectors
+        assert index.vectors.shape[0] == 5
+        assert len(index.docs) == 5
+        assert len(index.keyword_df) == 5
+        
+        # Search and verify all documents are searchable
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, num_results=5)
+        assert len(results) == 5
+    
+    def test_append_batch_to_empty_index(self):
+        """Test appending batch to an empty index (without fit)."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create empty index
+        index = VectorSearch(keyword_fields=["category"])
+        
+        # Append a batch of vectors
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "category": "programming"},
+            {"id": 2, "title": "Doc 2", "category": "data"},
+            {"id": 3, "title": "Doc 3", "category": "ai"}
+        ]
+        index.append_batch(vectors, payload)
+        
+        # Verify the index has 3 vectors
+        assert index.vectors.shape[0] == 3
+        assert len(index.docs) == 3
+        assert len(index.keyword_df) == 3
+        
+        # Search should work
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, num_results=2)
+        assert len(results) == 2
+    
+    def test_append_batch_mismatch(self):
+        """Test error when vectors and payload have different lengths in append_batch."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1"},
+            {"id": 2, "title": "Doc 2"}
+        ]
+        
+        index = VectorSearch(keyword_fields=[])
+        
+        with pytest.raises(ValueError, match="Number of vectors must match number of payload documents"):
+            index.append_batch(vectors, payload)
+    
+    def test_append_with_keyword_filtering(self):
+        """Test that appending preserves keyword filtering functionality."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create initial index
+        index = VectorSearch(keyword_fields=["category"])
+        initial_vectors = np.random.rand(2, 10)
+        initial_payload = [
+            {"id": 1, "title": "Doc 1", "category": "programming"},
+            {"id": 2, "title": "Doc 2", "category": "data"}
+        ]
+        index.fit(initial_vectors, initial_payload)
+        
+        # Append a new vector
+        new_vector = np.random.rand(10)
+        new_doc = {"id": 3, "title": "Doc 3", "category": "programming"}
+        index.append(new_vector, new_doc)
+        
+        # Search with filter
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={"category": "programming"}, num_results=5)
+        
+        # Should only return programming documents (ids 1 and 3)
+        assert len(results) == 2
+        assert all(doc["category"] == "programming" for doc in results)
+        assert set(doc["id"] for doc in results) == {1, 3}
+    
+    def test_mixed_append_and_append_batch(self):
+        """Test mixing append and append_batch operations."""
+        # Set seed for reproducible results
+        np.random.seed(42)
+        
+        # Create empty index
+        index = VectorSearch(keyword_fields=["category"])
+        
+        # Append single vector
+        index.append(np.random.rand(10), {"id": 1, "title": "Doc 1", "category": "a"})
+        
+        # Append batch
+        index.append_batch(
+            np.random.rand(2, 10),
+            [
+                {"id": 2, "title": "Doc 2", "category": "b"},
+                {"id": 3, "title": "Doc 3", "category": "c"}
+            ]
+        )
+        
+        # Append another single vector
+        index.append(np.random.rand(10), {"id": 4, "title": "Doc 4", "category": "a"})
+        
+        # Verify the index has 4 vectors
+        assert index.vectors.shape[0] == 4
+        assert len(index.docs) == 4
+        
+        # Search should work
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, num_results=4)
+        assert len(results) == 4

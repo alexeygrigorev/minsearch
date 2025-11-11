@@ -46,6 +46,80 @@ class VectorSearch:
         self.keyword_df = pd.DataFrame(keyword_data)
         
         return self
+    
+    def append(self, vector, doc):
+        """
+        Appends a single vector and its corresponding document to the index.
+        
+        Args:
+            vector (np.ndarray): 1D numpy array representing the vector to append.
+            doc (dict): Document to append as payload.
+        
+        Returns:
+            self: Returns the index instance for method chaining.
+        """
+        # Reshape vector to 2D if needed (ensure it's a row vector)
+        if vector.ndim == 1:
+            vector = vector.reshape(1, -1)
+        
+        # Initialize vectors if this is the first document
+        if self.vectors is None:
+            self.vectors = vector
+            self.docs = [doc]
+            
+            # Initialize keyword DataFrame
+            keyword_data = {field: [doc.get(field)] for field in self.keyword_fields}
+            self.keyword_df = pd.DataFrame(keyword_data)
+        else:
+            # Append vector to existing vectors
+            self.vectors = np.vstack([self.vectors, vector])
+            self.docs.append(doc)
+            
+            # Append to keyword DataFrame
+            new_row = {field: doc.get(field) for field in self.keyword_fields}
+            self.keyword_df = pd.concat([self.keyword_df, pd.DataFrame([new_row])], ignore_index=True)
+        
+        return self
+    
+    def append_batch(self, vectors, payload):
+        """
+        Appends multiple vectors and their corresponding documents to the index.
+        
+        Args:
+            vectors (np.ndarray): 2D numpy array of shape (n_docs, vector_dimension).
+            payload (list of dict): List of documents to append as payload.
+        
+        Returns:
+            self: Returns the index instance for method chaining.
+        """
+        if len(vectors) != len(payload):
+            raise ValueError("Number of vectors must match number of payload documents")
+        
+        # Initialize vectors if this is the first batch
+        if self.vectors is None:
+            self.vectors = vectors
+            self.docs = payload
+            
+            # Initialize keyword DataFrame
+            keyword_data = {field: [] for field in self.keyword_fields}
+            for doc in payload:
+                for field in self.keyword_fields:
+                    keyword_data[field].append(doc.get(field))
+            self.keyword_df = pd.DataFrame(keyword_data)
+        else:
+            # Append vectors to existing vectors
+            self.vectors = np.vstack([self.vectors, vectors])
+            self.docs.extend(payload)
+            
+            # Append to keyword DataFrame
+            keyword_data = {field: [] for field in self.keyword_fields}
+            for doc in payload:
+                for field in self.keyword_fields:
+                    keyword_data[field].append(doc.get(field))
+            new_df = pd.DataFrame(keyword_data)
+            self.keyword_df = pd.concat([self.keyword_df, new_df], ignore_index=True)
+        
+        return self
         
     def search(self, query_vector, filter_dict=None, num_results=10, output_ids=False):
         """
