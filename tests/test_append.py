@@ -537,3 +537,109 @@ def test_output_ids(text_fields, keyword_fields, sample_docs):
     # Test that IDs match document positions
     for doc in results_with_ids:
         assert doc == {**sample_docs[doc["_id"]], "_id": doc["_id"]}
+
+
+def test_appended_document_ranking_matches_index():
+    """
+    Test that documents appended to AppendableIndex rank similarly to
+    when the same document is included in a regular Index from the start.
+
+    This is a regression test for an issue where appended documents didn't
+    appear in search results because of incorrect L2 normalization in the
+    TF-IDF calculation.
+    """
+    # Create a corpus with several documents
+    initial_docs = [
+        {
+            "question": "What is Docker?",
+            "text": "Docker is a container platform.",
+            "section": "Module 1: Docker and Terraform",
+            "course": "de-zoomcamp",
+        },
+        {
+            "question": "How to use Docker Compose?",
+            "text": "Docker Compose helps manage multiple containers.",
+            "section": "Module 1: Docker and Terraform",
+            "course": "de-zoomcamp",
+        },
+        {
+            "question": "What is PostgreSQL?",
+            "text": "PostgreSQL is a relational database.",
+            "section": "Module 1: Docker and Terraform",
+            "course": "de-zoomcamp",
+        },
+        {
+            "question": "How to connect to PostgreSQL?",
+            "text": "Use psycopg2 to connect Python to PostgreSQL.",
+            "section": "Module 1: Docker and Terraform",
+            "course": "de-zoomcamp",
+        },
+    ]
+
+    # A new document to be appended
+    new_doc = {
+        "question": "How do I do well in Docker during Module 1?",
+        "text": "Learn Docker concepts and practice with containers.",
+        "section": "user added",  # Different section than the corpus
+        "course": "de-zoomcamp",
+    }
+
+    text_fields = ["question", "text", "section"]
+    keyword_fields = ["course"]
+
+    # Create AppendableIndex with fit + append
+    appendable_index = AppendableIndex(text_fields, keyword_fields)
+    appendable_index.fit(initial_docs)
+    appendable_index.append(new_doc)
+
+    # Create regular Index with all docs
+    all_docs = initial_docs + [new_doc]
+    regular_index = Index(text_fields, keyword_fields)
+    regular_index.fit(all_docs)
+
+    # Search for the exact question of the new document
+    query = "How do I do well in Docker during Module 1?"
+
+    regular_results = regular_index.search(query, num_results=10)
+    appendable_results = appendable_index.search(query, num_results=10)
+
+    # The new document should appear in both result sets
+    regular_questions = [r["question"] for r in regular_results]
+    appendable_questions = [r["question"] for r in appendable_results]
+
+    # Check that the new document is found in both indices
+    assert new_doc["question"] in regular_questions, (
+        "New document should be found in regular Index results"
+    )
+    assert new_doc["question"] in appendable_questions, (
+        "New document should be found in AppendableIndex results"
+    )
+
+
+def test_appended_document_normalized_correctly():
+    """
+    Test that documents with different numbers of tokens are normalized
+    correctly, matching sklearn's TF-IDF behavior.
+
+    Documents with more non-query tokens should have lower scores than
+    documents with fewer non-query tokens (all else being equal).
+    """
+    # Two documents: one with only query terms, one with extra terms
+    docs = [
+        {"text": "docker module"},  # Only query terms
+        {"text": "docker module extra terms here"},  # Query terms + extras
+    ]
+
+    index = AppendableIndex(text_fields=["text"], keyword_fields=[])
+    index.fit(docs)
+
+    # Search for "docker module"
+    results = index.search("docker module", num_results=10)
+
+    # The first document (fewer tokens) should rank higher than the second
+    assert results[0]["text"] == "docker module", (
+        "Document with only query terms should rank higher"
+    )
+    assert results[1]["text"] == "docker module extra terms here", (
+        "Document with extra terms should rank lower"
+    )

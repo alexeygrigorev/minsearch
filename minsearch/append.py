@@ -350,10 +350,19 @@ class AppendableIndex:
                     if token in doc_tokens:
                         tfidf = self._calculate_tfidf(field, token, doc_id)
                         doc_vector[i] = tfidf
-                # L2 normalize the document vector
-                doc_norm = np.linalg.norm(doc_vector)
-                if doc_norm > 0:
-                    doc_vector = doc_vector / doc_norm
+
+                # Calculate the FULL document norm using ALL tokens (not just query-matching)
+                # This matches sklearn's behavior where normalization considers all terms
+                full_doc_norm_squared = 0.0
+                unique_doc_tokens = set(doc_tokens)
+                for token in unique_doc_tokens:
+                    tfidf = self._calculate_tfidf(field, token, doc_id)
+                    full_doc_norm_squared += tfidf * tfidf
+                full_doc_norm = math.sqrt(full_doc_norm_squared)
+
+                # L2 normalize using the full document norm
+                if full_doc_norm > 0:
+                    doc_vector = doc_vector / full_doc_norm
                 doc_vectors[doc_id] = doc_vector
         return doc_vectors
 
