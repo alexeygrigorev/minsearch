@@ -354,6 +354,7 @@ class AppendableIndex:
                 # Calculate the FULL document norm using ALL tokens (not just query-matching)
                 # This matches sklearn's behavior where normalization considers all terms
                 full_doc_norm_squared = 0.0
+                # Use set to avoid double-counting tokens (TF-IDF already accounts for term frequency)
                 unique_doc_tokens = set(doc_tokens)
                 for token in unique_doc_tokens:
                     tfidf = self._calculate_tfidf(field, token, doc_id)
