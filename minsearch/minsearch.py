@@ -1,9 +1,12 @@
 import pandas as pd
+import re
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 import numpy as np
+
+from minsearch.highlight import apply_highlight
 
 
 class Index:
@@ -83,7 +86,7 @@ class Index:
 
         return self
 
-    def search(self, query, filter_dict=None, boost_dict=None, num_results=10, output_ids=False):
+    def search(self, query, filter_dict=None, boost_dict=None, num_results=10, output_ids=False, highlight=None):
         """
         Searches the index with the given query, filters, and boost parameters.
 
@@ -93,10 +96,17 @@ class Index:
             boost_dict (dict): Dictionary of boost scores for text fields. Keys are field names and values are the boost scores.
             num_results (int): The number of top results to return. Defaults to 10.
             output_ids (bool): If True, adds an '_id' field to each document containing its index. Defaults to False.
+            highlight (dict, optional): Configuration for highlighting/snippet extraction. If provided, text fields
+                                       will be replaced with snippets. Expected keys:
+                                       - fragment_size (int): Maximum size of each fragment. Defaults to 150.
+                                       - number_of_fragments (int): Number of fragments to return. Defaults to 1.
+                                       - pre_tag (str): Tag to insert before highlighted terms. Defaults to empty string.
+                                       - post_tag (str): Tag to insert after highlighted terms. Defaults to empty string.
 
         Returns:
             list of dict: List of documents matching the search criteria, ranked by relevance.
                          If output_ids is True, each document will have an additional '_id' field.
+                         If highlight is provided, text fields will contain snippets instead of full text.
         """
         if filter_dict is None:
             filter_dict = {}
@@ -144,6 +154,18 @@ class Index:
         top_indices = sorted_indices[:num_results]
         
         # Return corresponding documents
-        if output_ids:
-            return [{**self.docs[i], '_id': int(i)} for i in top_indices]
-        return [self.docs[i] for i in top_indices]
+        results = []
+        for i in top_indices:
+            doc = self.docs[i].copy()
+            if output_ids:
+                doc['_id'] = int(i)
+            results.append(doc)
+        
+        # Apply highlighting if requested
+        if highlight:
+            # Extract query tokens using the same tokenization as TF-IDF
+            # Use a simple tokenization approach similar to sklearn's default
+            query_tokens = re.findall(r'\b\w\w+\b', query.lower())
+            results = [apply_highlight(doc, self.text_fields, query_tokens, highlight) for doc in results]
+        
+        return results
