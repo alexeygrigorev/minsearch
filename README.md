@@ -12,6 +12,7 @@ A minimalistic search engine that provides both text-based and vector-based sear
 - Vector search with cosine similarity for pre-computed embeddings
 - Keyword field filtering with exact matching
 - Field boosting for fine-tuning search relevance (text-based search)
+- Text highlighting and snippet extraction for search results
 - Stop word removal and custom tokenization
 - Support for incremental document addition (AppendableIndex and VectorSearch)
 - Customizable tokenizer patterns and stop words
@@ -188,6 +189,39 @@ filter_dict = {
 }
 results = index.search("python", filter_dict=filter_dict)
 ```
+
+#### Text Highlighting and Snippets
+
+Extract snippets around matching terms instead of returning full document text:
+
+```python
+from minsearch import Index
+
+# Create and fit index
+docs = [
+    {
+        "title": "Introduction to Python Programming",
+        "text": "Python is a high-level, interpreted programming language. It is widely used for web development, data analysis, artificial intelligence, and scientific computing. Python's simple syntax makes it easy to learn for beginners.",
+        "course": "python-basics"
+    }
+]
+
+index = Index(text_fields=["title", "text"], keyword_fields=["course"])
+index.fit(docs)
+
+# Search with highlighting - returns snippets instead of full text
+highlight_config = {
+    "fragment_size": 150,         # Maximum size of each snippet
+    "number_of_fragments": 1,     # Number of snippets to return per field
+    "pre_tag": "*",               # Tag to insert before matching terms
+    "post_tag": "*"               # Tag to insert after matching terms
+}
+
+results = index.search("python programming", highlight=highlight_config)
+# Results will contain snippets like "...*Python* is a high-level, interpreted *programming* language..."
+```
+
+This feature is available for both `Index` and `AppendableIndex` search methods.
 
 ## Examples
 
