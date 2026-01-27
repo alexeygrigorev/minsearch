@@ -114,13 +114,13 @@ def extract_snippet(text, query_tokens, fragment_size=150, number_of_fragments=1
     # Combine fragments
     result_fragments = []
     for i, frag in enumerate(fragments):
-        text = frag['text']
+        fragment_text = frag['text']
         # Add ellipsis if not at the beginning/end of the document
         if frag['start'] > 0:
-            text = "..." + text
+            fragment_text = "..." + fragment_text
         if frag['start'] + len(frag['text']) < len(text):
-            text = text + "..."
-        result_fragments.append(text)
+            fragment_text = fragment_text + "..."
+        result_fragments.append(fragment_text)
     
     return " ... ".join(result_fragments) if result_fragments else ""
 

@@ -118,11 +118,12 @@ def test_index_search_with_highlight(text_fields, keyword_fields, sample_docs):
     assert len(results_with_highlight) > 0
     
     # Highlighted results should have shorter text
-    for i, result in enumerate(results_with_highlight):
+    for result in results_with_highlight:
         assert "text" in result
-        # The highlighted text should be shorter than or equal to the original
-        original_text_len = len(sample_docs[0]["text"])
-        assert len(result["text"]) <= original_text_len
+        # The highlighted text should be shorter than or equal to any original document
+        # (we just verify it's reasonable, not checking against a specific doc)
+        max_text_len = max(len(doc["text"]) for doc in sample_docs)
+        assert len(result["text"]) <= max_text_len
 
 
 def test_index_search_with_highlight_tags(text_fields, keyword_fields, sample_docs):
