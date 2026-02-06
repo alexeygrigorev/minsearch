@@ -1,9 +1,22 @@
 import re
 import math
+from datetime import date, datetime
 
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
+
+
+# Operator mapping for range filters
+OPERATORS = {
+    '>=': lambda a, b: a >= b,
+    '>': lambda a, b: a > b,
+    '<=': lambda a, b: a <= b,
+    '<': lambda a, b: a < b,
+    '==': lambda a, b: a == b,
+    '!=': lambda a, b: a != b,
+}
 
 
 class Tokenizer:
@@ -231,31 +244,40 @@ class Tokenizer:
 
 class AppendableIndex:
     """
-    An appendable search index using inverted index for text fields and exact matching for keyword fields.
+    An appendable search index using inverted index for text fields, exact matching for keyword fields,
+    and range filters for numeric and date fields.
     Maintains the same interface as the original Index class but allows for appending documents.
 
     Attributes:
         text_fields (list): List of text field names to index.
         keyword_fields (list): List of keyword field names to index.
+        numeric_fields (list): List of numeric field names to index.
+        date_fields (list): List of date field names to index.
         keyword_data (dict): Dictionary containing keyword field data as lists.
+        numeric_data (dict): Dictionary containing numeric field data as lists.
+        date_data (dict): Dictionary containing date field data as lists.
         docs (list): List of documents indexed.
         inverted_index (dict): Dictionary of inverted indices for each text field.
         doc_frequencies (dict): Dictionary of document frequencies for each text field.
         total_docs (int): Total number of documents in the index.
     """
 
-    def __init__(self, text_fields, keyword_fields=None, stop_words=None):
+    def __init__(self, text_fields, keyword_fields=None, numeric_fields=None, date_fields=None, stop_words=None):
         """
-        Initializes the AppendableIndex with specified text and keyword fields.
+        Initializes the AppendableIndex with specified text, keyword, numeric, and date fields.
 
         Args:
             text_fields (list): List of text field names to index.
             keyword_fields (list, optional): List of keyword field names to index. Defaults to empty list.
+            numeric_fields (list, optional): List of numeric field names to index. Defaults to empty list.
+            date_fields (list, optional): List of date field names to index. Defaults to empty list.
             stop_words (set or None): Set of stop words to remove. If None, uses default
                                     English stop words. If empty set, no stop words are removed.
         """
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields if keyword_fields is not None else []
+        self.numeric_fields = numeric_fields if numeric_fields is not None else []
+        self.date_fields = date_fields if date_fields is not None else []
 
         # Initialize data structures
         self.docs = []
@@ -263,6 +285,8 @@ class AppendableIndex:
         self.inverted_index = {field: defaultdict(list) for field in text_fields}
         self.doc_frequencies = {field: defaultdict(int) for field in text_fields}
         self.keyword_data = {field: [] for field in self.keyword_fields}
+        self.numeric_data = {field: [] for field in self.numeric_fields}
+        self.date_data = {field: [] for field in self.date_fields}
 
         # Store vocabulary for each field
         self.vocabularies = {field: set() for field in text_fields}
@@ -375,14 +399,62 @@ class AppendableIndex:
         return field_scores
 
     def _apply_keyword_filters(self, scores, filter_dict):
-        """Apply keyword filters to the scores."""
+        """Apply keyword, numeric, and date filters to the scores."""
         for field, value in filter_dict.items():
+            # Keyword field filters (exact match)
             if field in self.keyword_fields:
                 if value is None:
                     mask = np.array([val is None for val in self.keyword_data[field]])
                 else:
                     mask = np.array([val == value for val in self.keyword_data[field]])
                 scores = scores * mask
+
+            # Numeric field filters (exact match or range comparisons)
+            elif field in self.numeric_fields:
+                if value is None:
+                    # Filter for None values
+                    mask = np.array([val is None for val in self.numeric_data[field]])
+                    scores = scores * mask
+                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
+                    # Range filter: [('>=', 10), ('<', 20)]
+                    mask = np.ones(len(self.docs), dtype=bool)
+                    for op, op_value in value:
+                        if op in OPERATORS and op_value is not None:
+                            series_mask = np.array([OPERATORS[op](val, op_value) if val is not None else False
+                                                    for val in self.numeric_data[field]])
+                            mask = mask & series_mask
+                    scores = scores * mask
+                else:
+                    # Exact match
+                    mask = np.array([val == value for val in self.numeric_data[field]])
+                    scores = scores * mask
+
+            # Date field filters (exact match or range comparisons)
+            elif field in self.date_fields:
+                if value is None:
+                    # Filter for None values
+                    mask = np.array([val is None for val in self.date_data[field]])
+                    scores = scores * mask
+                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
+                    # Range filter: [('>=', date), ('<', date)]
+                    mask = np.ones(len(self.docs), dtype=bool)
+                    for op, op_value in value:
+                        if op in OPERATORS and op_value is not None:
+                            # Convert date/datetime to pandas Timestamp for comparison
+                            if isinstance(op_value, (date, datetime)):
+                                op_value = pd.Timestamp(op_value)
+                            series_mask = np.array([OPERATORS[op](val, op_value)
+                                                    if val is not None else False
+                                                    for val in self.date_data[field]])
+                            mask = mask & series_mask
+                    scores = scores * mask
+                else:
+                    # Exact match (convert date/datetime to Timestamp)
+                    if isinstance(value, (date, datetime)):
+                        value = pd.Timestamp(value)
+                    mask = np.array([val == value for val in self.date_data[field]])
+                    scores = scores * mask
+
         return scores
 
     def _get_top_results(self, scores, num_results):
@@ -426,6 +498,18 @@ class AppendableIndex:
             for field in self.keyword_fields:
                 self.keyword_data[field].append(doc.get(field))
 
+            # Collect numeric data
+            for field in self.numeric_fields:
+                self.numeric_data[field].append(doc.get(field))
+
+            # Collect date data
+            for field in self.date_fields:
+                value = doc.get(field)
+                if isinstance(value, (date, datetime)):
+                    self.date_data[field].append(pd.Timestamp(value))
+                else:
+                    self.date_data[field].append(value)
+
         # Only check vocabulary if we have documents
         if self.docs:
             has_vocabulary = any(len(vocab) > 0 for vocab in self.vocabularies.values())
@@ -454,6 +538,18 @@ class AppendableIndex:
         # Update keyword data
         for field in self.keyword_fields:
             self.keyword_data[field].append(doc.get(field))
+
+        # Update numeric data
+        for field in self.numeric_fields:
+            self.numeric_data[field].append(doc.get(field))
+
+        # Update date data
+        for field in self.date_fields:
+            value = doc.get(field)
+            if isinstance(value, (date, datetime)):
+                self.date_data[field].append(pd.Timestamp(value))
+            else:
+                self.date_data[field].append(value)
 
         return self
 

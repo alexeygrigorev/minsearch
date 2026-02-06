@@ -1,4 +1,5 @@
 import pytest
+from datetime import date, datetime
 from minsearch.minsearch import Index
 from minsearch.append import AppendableIndex
 
@@ -643,3 +644,328 @@ def test_appended_document_normalized_correctly():
     assert results[1]["text"] == "docker module extra terms here", (
         "Document with extra terms should rank lower"
     )
+
+
+class TestAppendableIndexRangeFilters:
+    """Tests for numeric and date range filters in AppendableIndex."""
+
+    def test_numeric_filter_greater_than_or_equal(self):
+        """Test numeric filter with >= operator."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100},
+            {"question": "What is machine learning?", "text": "ML is AI.", "price": 200},
+            {"question": "How to write tests?", "text": "Tests with Python.", "price": 150},
+            {"question": "What is data science?", "text": "Data science.", "price": 50},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price"])
+        index.fit(docs)
+
+        results = index.search("python", filter_dict={"price": [('>=', 100)]})
+        assert all(doc["price"] >= 100 for doc in results)
+
+    def test_numeric_filter_range(self):
+        """Test numeric filter with range."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100},
+            {"question": "What is machine learning?", "text": "ML is AI.", "price": 200},
+            {"question": "How to write tests?", "text": "Tests with Python.", "price": 150},
+            {"question": "What is data science?", "text": "Data science.", "price": 50},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price"])
+        index.fit(docs)
+
+        results = index.search("python", filter_dict={"price": [('>', 100), ('<', 200)]})
+        assert len(results) == 1
+        assert results[0]["price"] == 150
+
+    def test_date_filter_greater_than_or_equal(self):
+        """Test date filter with >= operator."""
+        from datetime import date
+
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "created_at": date(2024, 1, 15)},
+            {"question": "What is ML with Python?", "text": "ML is AI.", "created_at": date(2024, 2, 20)},
+            {"question": "How to write tests?", "text": "Tests with Python.", "created_at": date(2024, 3, 10)},
+            {"question": "What is data science?", "text": "Data science.", "created_at": date(2024, 1, 5)},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], date_fields=["created_at"])
+        index.fit(docs)
+
+        results = index.search("python", filter_dict={"created_at": [('>=', date(2024, 2, 1))]})
+        assert all(doc["created_at"] >= date(2024, 2, 1) for doc in results)
+
+    def test_combined_keyword_and_numeric_filters(self):
+        """Test combining keyword and numeric filters."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100, "category": "A"},
+            {"question": "What is machine learning?", "text": "ML is AI.", "price": 200, "category": "B"},
+            {"question": "How to write tests in Python?", "text": "Tests with Python.", "price": 150, "category": "A"},
+            {"question": "What is data science?", "text": "Data science.", "price": 50, "category": "B"},
+        ]
+
+        index = AppendableIndex(
+            text_fields=["question", "text"],
+            keyword_fields=["category"],
+            numeric_fields=["price"]
+        )
+        index.fit(docs)
+
+        results = index.search("python", filter_dict={
+            "category": "A",
+            "price": [('>=', 100)]
+        })
+        assert all(doc["category"] == "A" and doc["price"] >= 100 for doc in results)
+
+    def test_append_with_numeric_field(self):
+        """Test that appending preserves numeric field functionality."""
+        index = AppendableIndex(text_fields=["question"], numeric_fields=["price"])
+
+        index.append({"question": "How do I use Python?", "price": 100})
+        index.append({"question": "What is machine learning?", "price": 200})
+        index.append({"question": "How to write tests in Python?", "price": 150})
+
+        results = index.search("python", filter_dict={"price": [('>=', 150)]})
+        assert all(doc["price"] >= 150 for doc in results)
+
+    def test_append_with_date_field(self):
+        """Test that appending preserves date field functionality."""
+        from datetime import date
+
+        index = AppendableIndex(text_fields=["question"], date_fields=["created_at"])
+
+        index.append({"question": "How do I use Python?", "created_at": date(2024, 1, 15)})
+        index.append({"question": "What is ML with Python?", "created_at": date(2024, 2, 20)})
+        index.append({"question": "How to write tests?", "created_at": date(2024, 3, 10)})
+
+        results = index.search("python", filter_dict={"created_at": [('>=', date(2024, 2, 1))]})
+        assert all(doc["created_at"] >= date(2024, 2, 1) for doc in results)
+
+    def test_fit_then_append_with_numeric_field(self):
+        """Test fit followed by append with numeric field."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100},
+            {"question": "What is machine learning?", "text": "ML is AI.", "price": 200},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price"])
+        index.fit(docs)
+
+        # Append more docs
+        index.append({"question": "How to write tests in Python?", "text": "Tests.", "price": 150})
+        index.append({"question": "What is data science?", "text": "Data.", "price": 50})
+
+        # All docs should be searchable with numeric filter
+        results = index.search("python", filter_dict={"price": [('>=', 100)]})
+        assert all(doc["price"] >= 100 for doc in results)
+
+    def test_all_numeric_operators(self):
+        """Test all supported numeric operators."""
+        docs = [
+            {"question": "Doc 1", "text": "Test", "value": 10},
+            {"question": "Doc 2", "text": "Test", "value": 20},
+            {"question": "Doc 3", "text": "Test", "value": 30},
+        ]
+
+        index = AppendableIndex(text_fields=["question"], numeric_fields=["value"])
+        index.fit(docs)
+
+        # Test >=
+        results = index.search("test", filter_dict={"value": [('>=', 20)]})
+        assert all(doc["value"] >= 20 for doc in results)
+
+        # Test >
+        results = index.search("test", filter_dict={"value": [('>', 20)]})
+        assert all(doc["value"] > 20 for doc in results)
+
+        # Test <=
+        results = index.search("test", filter_dict={"value": [('<=', 20)]})
+        assert all(doc["value"] <= 20 for doc in results)
+
+        # Test <
+        results = index.search("test", filter_dict={"value": [('<', 20)]})
+        assert all(doc["value"] < 20 for doc in results)
+
+        # Test ==
+        results = index.search("test", filter_dict={"value": [('==', 20)]})
+        assert all(doc["value"] == 20 for doc in results)
+
+        # Test !=
+        results = index.search("test", filter_dict={"value": [('!=', 20)]})
+        assert all(doc["value"] != 20 for doc in results)
+
+    def test_numeric_exact_match_equality(self):
+        """Test numeric field exact match with simple value (not list)."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100},
+            {"question": "What is machine learning?", "text": "ML is AI.", "price": 200},
+            {"question": "How to write tests?", "text": "Tests with Python.", "price": 150},
+            {"question": "What is data science?", "text": "Data science.", "price": 50},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price"])
+        index.fit(docs)
+
+        # Exact match: price == 150
+        results = index.search("python", filter_dict={"price": 150})
+        assert len(results) == 1
+        assert results[0]["price"] == 150
+
+    def test_date_exact_match_equality(self):
+        """Test date field exact match with simple value (not list)."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "created_at": date(2024, 1, 15)},
+            {"question": "What is ML with Python?", "text": "ML is AI.", "created_at": date(2024, 2, 20)},
+            {"question": "How to write tests?", "text": "Tests with Python.", "created_at": date(2024, 3, 10)},
+            {"question": "What is data science?", "text": "Data science.", "created_at": date(2024, 1, 5)},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], date_fields=["created_at"])
+        index.fit(docs)
+
+        # Exact match: created_at == date(2024, 2, 20)
+        results = index.search("python", filter_dict={"created_at": date(2024, 2, 20)})
+        assert len(results) == 1
+        assert results[0]["created_at"] == date(2024, 2, 20)
+
+    def test_numeric_none_values(self):
+        """Test numeric field with None values."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "price": 100},
+            {"question": "What is ML with Python?", "text": "ML is AI.", "price": None},
+            {"question": "How to write tests?", "text": "Tests with Python.", "price": 200},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price"])
+        index.fit(docs)
+
+        # price == None
+        results = index.search("python", filter_dict={"price": None})
+        assert len(results) == 1
+        assert results[0]["price"] is None
+
+    def test_date_none_values(self):
+        """Test date field with None values."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python is great.", "created_at": date(2024, 1, 15)},
+            {"question": "What is ML with Python?", "text": "ML is AI.", "created_at": None},
+            {"question": "How to write tests?", "text": "Tests with Python.", "created_at": date(2024, 2, 20)},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], date_fields=["created_at"])
+        index.fit(docs)
+
+        # created_at == None
+        results = index.search("python", filter_dict={"created_at": None})
+        assert len(results) == 1
+        assert results[0]["created_at"] is None
+
+    def test_multiple_numeric_fields(self):
+        """Test filtering on multiple numeric fields simultaneously."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python.", "price": 100, "rating": 4.5},
+            {"question": "What is machine learning?", "text": "ML.", "price": 200, "rating": 3.8},
+            {"question": "How to write tests in Python?", "text": "Tests.", "price": 150, "rating": 4.2},
+            {"question": "What is data science?", "text": "Data.", "price": 50, "rating": 4.8},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["price", "rating"])
+        index.fit(docs)
+
+        # price >= 100 AND rating >= 4.0
+        results = index.search("python", filter_dict={
+            "price": [('>=', 100)],
+            "rating": [('>=', 4.0)]
+        })
+        assert all(doc["price"] >= 100 and doc["rating"] >= 4.0 for doc in results)
+
+    def test_zero_values_in_numeric_fields(self):
+        """Test that zero values are handled correctly in numeric fields."""
+        docs = [
+            {"question": "Test doc one", "text": "Test", "value": 0},
+            {"question": "Test doc two", "text": "Test", "value": 10},
+            {"question": "Test doc three", "text": "Test", "value": -5},
+        ]
+
+        index = AppendableIndex(text_fields=["question", "text"], numeric_fields=["value"])
+        index.fit(docs)
+
+        # value == 0
+        results = index.search("test", filter_dict={"value": 0})
+        assert len(results) == 1
+        assert results[0]["value"] == 0
+
+        # value >= 0
+        results = index.search("test", filter_dict={"value": [('>=', 0)]})
+        assert all(doc["value"] >= 0 for doc in results)
+
+    def test_negative_numeric_values(self):
+        """Test that negative values work correctly in numeric fields."""
+        docs = [
+            {"question": "Doc 1", "text": "Test", "value": -10},
+            {"question": "Doc 2", "text": "Test", "value": -5},
+            {"question": "Doc 3", "text": "Test", "value": 0},
+        ]
+
+        index = AppendableIndex(text_fields=["question"], numeric_fields=["value"])
+        index.fit(docs)
+
+        # value >= -7
+        results = index.search("test", filter_dict={"value": [('>=', -7)]})
+        assert all(doc["value"] >= -7 for doc in results)
+
+        # -10 < value < 0
+        results = index.search("test", filter_dict={"value": [('>', -10), ('<', 0)]})
+        assert all(doc["value"] > -10 and doc["value"] < 0 for doc in results)
+
+    def test_combined_equality_and_range_filters(self):
+        """Test mixing equality (simple value) and range (list) filters."""
+        docs = [
+            {"question": "How do I use Python?", "text": "Python.", "price": 100, "category": "A"},
+            {"question": "What is machine learning?", "text": "ML.", "price": 200, "category": "B"},
+            {"question": "How to write tests in Python?", "text": "Tests.", "price": 150, "category": "A"},
+            {"question": "What is data science?", "text": "Data.", "price": 50, "category": "A"},
+        ]
+
+        index = AppendableIndex(
+            text_fields=["question", "text"],
+            keyword_fields=["category"],
+            numeric_fields=["price"]
+        )
+        index.fit(docs)
+
+        # category == "A" (equality) AND price >= 100 (range)
+        results = index.search("python", filter_dict={
+            "category": "A",
+            "price": [('>=', 100)]
+        })
+        assert all(doc["category"] == "A" and doc["price"] >= 100 for doc in results)
+
+    def test_append_with_numeric_exact_match(self):
+        """Test append with numeric exact match filter."""
+        index = AppendableIndex(text_fields=["question"], numeric_fields=["price"])
+
+        index.append({"question": "How do I use Python?", "price": 100})
+        index.append({"question": "What is ML with Python?", "price": 200})
+        index.append({"question": "How to write tests in Python?", "price": 200})
+
+        # Exact match: price == 200
+        results = index.search("python", filter_dict={"price": 200})
+        assert len(results) == 2
+        assert all(doc["price"] == 200 for doc in results)
+
+    def test_append_with_date_exact_match(self):
+        """Test append with date exact match filter."""
+        index = AppendableIndex(text_fields=["question"], date_fields=["created_at"])
+
+        target_date = date(2024, 2, 1)
+        index.append({"question": "How do I use Python?", "created_at": date(2024, 1, 15)})
+        index.append({"question": "What is ML with Python?", "created_at": target_date})
+        index.append({"question": "How to write Python tests?", "created_at": target_date})
+
+        # Exact match: created_at == target_date
+        results = index.search("python", filter_dict={"created_at": target_date})
+        assert len(results) == 2
+        assert all(doc["created_at"] == target_date for doc in results)

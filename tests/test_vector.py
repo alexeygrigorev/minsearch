@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from datetime import date, datetime
 from minsearch.vector import VectorSearch
 
 
@@ -364,3 +365,333 @@ class TestVectorSearch:
         query_vector = np.random.rand(10)
         results = index.search(query_vector, num_results=4)
         assert len(results) == 4
+
+
+class TestVectorSearchRangeFilters:
+    """Tests for numeric and date range filters in VectorSearch."""
+
+    def test_numeric_filter_greater_than_or_equal(self):
+        """Test numeric filter with >= operator."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100},
+            {"id": 2, "title": "Doc 2", "price": 200},
+            {"id": 3, "title": "Doc 3", "price": 150},
+            {"id": 4, "title": "Doc 4", "price": 50},
+        ]
+
+        index = VectorSearch(numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={"price": [('>=', 100)]})
+        assert all(doc["price"] >= 100 for doc in results)
+
+    def test_numeric_filter_range(self):
+        """Test numeric filter with range."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100},
+            {"id": 2, "title": "Doc 2", "price": 200},
+            {"id": 3, "title": "Doc 3", "price": 150},
+            {"id": 4, "title": "Doc 4", "price": 50},
+        ]
+
+        index = VectorSearch(numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={"price": [('>', 100), ('<', 200)]})
+        assert all(doc["price"] > 100 and doc["price"] < 200 for doc in results)
+
+    def test_date_filter_greater_than_or_equal(self):
+        """Test date filter with >= operator."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "created_at": date(2024, 1, 15)},
+            {"id": 2, "title": "Doc 2", "created_at": date(2024, 2, 20)},
+            {"id": 3, "title": "Doc 3", "created_at": date(2024, 3, 10)},
+        ]
+
+        index = VectorSearch(date_fields=["created_at"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={"created_at": [('>=', date(2024, 2, 1))]})
+        assert all(doc["created_at"] >= date(2024, 2, 1) for doc in results)
+
+    def test_datetime_filter(self):
+        """Test datetime filter with datetime objects."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "created_at": datetime(2024, 1, 15, 10, 30)},
+            {"id": 2, "title": "Doc 2", "created_at": datetime(2024, 2, 20, 14, 45)},
+            {"id": 3, "title": "Doc 3", "created_at": datetime(2024, 3, 10, 8, 0)},
+        ]
+
+        index = VectorSearch(date_fields=["created_at"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={
+            "created_at": [('>=', datetime(2024, 2, 1, 0, 0))]
+        })
+        assert all(doc["created_at"] >= datetime(2024, 2, 1, 0, 0) for doc in results)
+
+    def test_combined_keyword_and_numeric_filters(self):
+        """Test combining keyword and numeric filters."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100, "category": "A"},
+            {"id": 2, "title": "Doc 2", "price": 200, "category": "B"},
+            {"id": 3, "title": "Doc 3", "price": 150, "category": "A"},
+            {"id": 4, "title": "Doc 4", "price": 50, "category": "B"},
+        ]
+
+        index = VectorSearch(keyword_fields=["category"], numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={
+            "category": "A",
+            "price": [('>=', 100)]
+        })
+        assert all(doc["category"] == "A" and doc["price"] >= 100 for doc in results)
+
+    def test_append_with_numeric_field(self):
+        """Test that appending preserves numeric field functionality."""
+        np.random.seed(42)
+        index = VectorSearch(numeric_fields=["price"])
+
+        # Append initial vectors
+        index.append(np.random.rand(10), {"id": 1, "title": "Doc 1", "price": 100})
+        index.append(np.random.rand(10), {"id": 2, "title": "Doc 2", "price": 200})
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={"price": [('>=', 150)]})
+        assert all(doc["price"] >= 150 for doc in results)
+
+    def test_append_batch_with_date_field(self):
+        """Test that append_batch preserves date field functionality."""
+        np.random.seed(42)
+        index = VectorSearch(date_fields=["created_at"])
+
+        # Append batch
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "created_at": date(2024, 1, 15)},
+            {"id": 2, "title": "Doc 2", "created_at": date(2024, 2, 20)},
+            {"id": 3, "title": "Doc 3", "created_at": date(2024, 3, 10)},
+        ]
+        index.append_batch(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        results = index.search(query_vector, filter_dict={
+            "created_at": [('>=', date(2024, 2, 1))]
+        })
+        assert all(doc["created_at"] >= date(2024, 2, 1) for doc in results)
+
+    def test_all_numeric_operators(self):
+        """Test all supported numeric operators."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "value": 10},
+            {"id": 2, "title": "Doc 2", "value": 20},
+            {"id": 3, "title": "Doc 3", "value": 30},
+        ]
+
+        index = VectorSearch(numeric_fields=["value"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+
+        # Test >=
+        results = index.search(query_vector, filter_dict={"value": [('>=', 20)]})
+        assert all(doc["value"] >= 20 for doc in results)
+
+        # Test >
+        results = index.search(query_vector, filter_dict={"value": [('>', 20)]})
+        assert all(doc["value"] > 20 for doc in results)
+
+        # Test <=
+        results = index.search(query_vector, filter_dict={"value": [('<=', 20)]})
+        assert all(doc["value"] <= 20 for doc in results)
+
+        # Test <
+        results = index.search(query_vector, filter_dict={"value": [('<', 20)]})
+        assert all(doc["value"] < 20 for doc in results)
+
+        # Test ==
+        results = index.search(query_vector, filter_dict={"value": [('==', 20)]})
+        assert all(doc["value"] == 20 for doc in results)
+
+        # Test !=
+        results = index.search(query_vector, filter_dict={"value": [('!=', 20)]})
+        assert all(doc["value"] != 20 for doc in results)
+
+    def test_numeric_exact_match_equality(self):
+        """Test numeric field exact match with simple value (not list)."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100},
+            {"id": 2, "title": "Doc 2", "price": 200},
+            {"id": 3, "title": "Doc 3", "price": 150},
+            {"id": 4, "title": "Doc 4", "price": 50},
+        ]
+
+        index = VectorSearch(numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # Exact match: price == 150
+        results = index.search(query_vector, filter_dict={"price": 150})
+        assert all(doc["price"] == 150 for doc in results)
+
+    def test_date_exact_match_equality(self):
+        """Test date field exact match with simple value (not list)."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "created_at": date(2024, 1, 15)},
+            {"id": 2, "title": "Doc 2", "created_at": date(2024, 2, 20)},
+            {"id": 3, "title": "Doc 3", "created_at": date(2024, 3, 10)},
+        ]
+
+        index = VectorSearch(date_fields=["created_at"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # Exact match: created_at == date(2024, 2, 20)
+        results = index.search(query_vector, filter_dict={"created_at": date(2024, 2, 20)})
+        assert all(doc["created_at"] == date(2024, 2, 20) for doc in results)
+
+    def test_numeric_none_values(self):
+        """Test numeric field with None values."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100},
+            {"id": 2, "title": "Doc 2", "price": None},
+            {"id": 3, "title": "Doc 3", "price": 200},
+        ]
+
+        index = VectorSearch(numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # price == None
+        results = index.search(query_vector, filter_dict={"price": None})
+        assert all(doc["price"] is None for doc in results)
+
+    def test_date_none_values(self):
+        """Test date field with None values."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "created_at": date(2024, 1, 15)},
+            {"id": 2, "title": "Doc 2", "created_at": None},
+            {"id": 3, "title": "Doc 3", "created_at": date(2024, 2, 20)},
+        ]
+
+        index = VectorSearch(date_fields=["created_at"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # created_at == None
+        results = index.search(query_vector, filter_dict={"created_at": None})
+        assert all(doc["created_at"] is None for doc in results)
+
+    def test_multiple_numeric_fields(self):
+        """Test filtering on multiple numeric fields simultaneously."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100, "rating": 4.5},
+            {"id": 2, "title": "Doc 2", "price": 200, "rating": 3.8},
+            {"id": 3, "title": "Doc 3", "price": 150, "rating": 4.2},
+            {"id": 4, "title": "Doc 4", "price": 50, "rating": 4.8},
+        ]
+
+        index = VectorSearch(numeric_fields=["price", "rating"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # price >= 100 AND rating >= 4.0
+        results = index.search(query_vector, filter_dict={
+            "price": [('>=', 100)],
+            "rating": [('>=', 4.0)]
+        })
+        assert all(doc["price"] >= 100 and doc["rating"] >= 4.0 for doc in results)
+
+    def test_zero_values_in_numeric_fields(self):
+        """Test that zero values are handled correctly in numeric fields."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "value": 0},
+            {"id": 2, "title": "Doc 2", "value": 10},
+            {"id": 3, "title": "Doc 3", "value": -5},
+        ]
+
+        index = VectorSearch(numeric_fields=["value"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # value == 0
+        results = index.search(query_vector, filter_dict={"value": 0})
+        assert all(doc["value"] == 0 for doc in results)
+
+        # value >= 0
+        results = index.search(query_vector, filter_dict={"value": [('>=', 0)]})
+        assert all(doc["value"] >= 0 for doc in results)
+
+    def test_combined_equality_and_range_filters(self):
+        """Test mixing equality (simple value) and range (list) filters."""
+        np.random.seed(42)
+        vectors = np.random.rand(4, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "price": 100, "category": "A"},
+            {"id": 2, "title": "Doc 2", "price": 200, "category": "B"},
+            {"id": 3, "title": "Doc 3", "price": 150, "category": "A"},
+            {"id": 4, "title": "Doc 4", "price": 50, "category": "A"},
+        ]
+
+        index = VectorSearch(keyword_fields=["category"], numeric_fields=["price"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # category == "A" (equality) AND price >= 100 (range)
+        results = index.search(query_vector, filter_dict={
+            "category": "A",
+            "price": [('>=', 100)]
+        })
+        assert all(doc["category"] == "A" and doc["price"] >= 100 for doc in results)
+
+    def test_negative_numeric_values(self):
+        """Test that negative values work correctly in numeric fields."""
+        np.random.seed(42)
+        vectors = np.random.rand(3, 10)
+        payload = [
+            {"id": 1, "title": "Doc 1", "value": -10},
+            {"id": 2, "title": "Doc 2", "value": -5},
+            {"id": 3, "title": "Doc 3", "value": 0},
+        ]
+
+        index = VectorSearch(numeric_fields=["value"])
+        index.fit(vectors, payload)
+
+        query_vector = np.random.rand(10)
+        # value >= -7
+        results = index.search(query_vector, filter_dict={"value": [('>=', -7)]})
+        assert all(doc["value"] >= -7 for doc in results)
+
+        # -10 < value < 0
+        results = index.search(query_vector, filter_dict={"value": [('>', -10), ('<', 0)]})
+        assert all(doc["value"] > -10 and doc["value"] < 0 for doc in results)
