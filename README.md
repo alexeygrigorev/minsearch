@@ -23,6 +23,8 @@ A minimalistic search engine that provides both text-based and vector-based sear
 pip install minsearch
 ```
 
+**Note:** minsearch requires Python 3.10 or later.
+
 ## Environment setup
 
 For development purposes, use uv:
