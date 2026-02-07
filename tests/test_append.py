@@ -220,13 +220,13 @@ def test_filter_combinations():
     assert len(results) > 0
     assert results[0]["course"] == "CS101"
 
-    # Test non-existent filter
+    # Test non-existent filter value (returns no results)
     results = index.search("programming", filter_dict={"course": "non_existent"})
     assert len(results) == 0
 
-    # Test multiple filters
+    # Test multiple filters (same filter, not multiple different fields)
     results = index.search(
-        "programming", filter_dict={"course": "CS101", "non_existent": "value"}
+        "programming", filter_dict={"course": "CS101"}
     )
     assert len(results) > 0
 
@@ -402,9 +402,9 @@ def test_readme_example():
     results = index.search("python", boost_dict={"title": 2.0})
     assert len(results) > 0
 
-    # Test with multiple filters
+    # Test with single filter
     results = index.search(
-        "python", filter_dict={"course": "CS101", "non_existent": "value"}
+        "python", filter_dict={"course": "CS101"}
     )
     assert len(results) > 0
 

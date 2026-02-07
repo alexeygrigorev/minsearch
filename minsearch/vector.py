@@ -4,16 +4,7 @@ from datetime import date, datetime
 
 from sklearn.metrics.pairwise import cosine_similarity
 
-
-# Operator mapping for range filters
-OPERATORS = {
-    '>=': lambda a, b: a >= b,
-    '>': lambda a, b: a > b,
-    '<=': lambda a, b: a <= b,
-    '<': lambda a, b: a < b,
-    '==': lambda a, b: a == b,
-    '!=': lambda a, b: a != b,
-}
+from .filters import Filter
 
 
 class VectorSearch:
@@ -34,14 +25,24 @@ class VectorSearch:
             numeric_fields (list, optional): List of numeric field names to index for range filters. Defaults to empty list.
             date_fields (list, optional): List of date field names to index for range filters. Defaults to empty list.
         """
-        self.keyword_fields = keyword_fields if keyword_fields is not None else []
-        self.numeric_fields = numeric_fields if numeric_fields is not None else []
-        self.date_fields = date_fields if date_fields is not None else []
+        self.keyword_fields = keyword_fields or []
+        self.numeric_fields = numeric_fields or []
+        self.date_fields = date_fields or []
         self.vectors = None  # 2D numpy array of vectors
         self.keyword_df = None  # DataFrame containing keyword field data
         self.numeric_df = None  # DataFrame containing numeric field data
         self.date_df = None  # DataFrame containing date field data
         self.docs = []  # List of documents (payload)
+        # Initialize the filter with empty data (will be updated on fit/append)
+        self._filter = Filter(
+            keyword_fields=self.keyword_fields,
+            numeric_fields=self.numeric_fields,
+            date_fields=self.date_fields,
+            keyword_data={},
+            numeric_data={},
+            date_data={},
+            num_docs=0,
+        )
         
     def fit(self, vectors, payload):
         """
@@ -78,6 +79,17 @@ class VectorSearch:
         self.keyword_df = pd.DataFrame(keyword_data)
         self.numeric_df = pd.DataFrame(numeric_data)
         self.date_df = pd.DataFrame(date_data)
+
+        # Initialize the filter
+        self._filter = Filter(
+            keyword_fields=self.keyword_fields,
+            numeric_fields=self.numeric_fields,
+            date_fields=self.date_fields,
+            keyword_data=self.keyword_df,
+            numeric_data=self.numeric_df,
+            date_data=self.date_df,
+            num_docs=len(self.docs),
+        )
 
         return self
     
@@ -134,6 +146,14 @@ class VectorSearch:
                 else:
                     date_row[field] = value
             self.date_df = pd.concat([self.date_df, pd.DataFrame([date_row])], ignore_index=True)
+
+        # Update the filter
+        self._filter.refresh(
+            keyword_data=self.keyword_df,
+            numeric_data=self.numeric_df,
+            date_data=self.date_df,
+            num_docs=len(self.docs),
+        )
 
         return self
     
@@ -202,6 +222,14 @@ class VectorSearch:
             self.numeric_df = pd.concat([self.numeric_df, pd.DataFrame(numeric_data)], ignore_index=True)
             self.date_df = pd.concat([self.date_df, pd.DataFrame(date_data)], ignore_index=True)
 
+        # Update the filter
+        self._filter.refresh(
+            keyword_data=self.keyword_df,
+            numeric_data=self.numeric_df,
+            date_data=self.date_df,
+            num_docs=len(self.docs),
+        )
+
         return self
         
     def search(self, query_vector, filter_dict=None, num_results=10, output_ids=False):
@@ -234,58 +262,9 @@ class VectorSearch:
         # Compute cosine similarity
         scores = cosine_similarity(query_vector_2d, self.vectors).flatten()
 
-        # Apply filters
-        for field, value in filter_dict.items():
-            # Keyword field filters (exact match)
-            if field in self.keyword_fields:
-                if value is None:
-                    mask = self.keyword_df[field].isna()
-                else:
-                    mask = self.keyword_df[field] == value
-                scores = scores * mask.to_numpy()
-
-            # Numeric field filters (exact match or range comparisons)
-            elif field in self.numeric_fields:
-                if value is None:
-                    # Filter for None values
-                    mask = self.numeric_df[field].isna()
-                    scores = scores * mask.to_numpy()
-                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
-                    # Range filter: [('>=', 10), ('<', 20)]
-                    mask = np.ones(len(self.docs), dtype=bool)
-                    for op, op_value in value:
-                        if op in OPERATORS and op_value is not None:
-                            series_mask = OPERATORS[op](self.numeric_df[field], op_value)
-                            mask = mask & series_mask.to_numpy()
-                    scores = scores * mask
-                else:
-                    # Exact match
-                    mask = self.numeric_df[field] == value
-                    scores = scores * mask.to_numpy()
-
-            # Date field filters (exact match or range comparisons)
-            elif field in self.date_fields:
-                if value is None:
-                    # Filter for None values
-                    mask = self.date_df[field].isna()
-                    scores = scores * mask.to_numpy()
-                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
-                    # Range filter: [('>=', date), ('<', date)]
-                    mask = np.ones(len(self.docs), dtype=bool)
-                    for op, op_value in value:
-                        if op in OPERATORS and op_value is not None:
-                            # Convert date/datetime to pandas Timestamp for comparison
-                            if isinstance(op_value, (date, datetime)):
-                                op_value = pd.Timestamp(op_value)
-                            series_mask = OPERATORS[op](self.date_df[field], op_value)
-                            mask = mask & series_mask.to_numpy()
-                    scores = scores * mask
-                else:
-                    # Exact match (convert date/datetime to Timestamp)
-                    if isinstance(value, (date, datetime)):
-                        value = pd.Timestamp(value)
-                    mask = self.date_df[field] == value
-                    scores = scores * mask.to_numpy()
+        # Apply filters using the Filter object
+        filter_mask = self._filter.apply(filter_dict)
+        scores = scores * filter_mask
 
         # Get number of non-zero scores
         non_zero_mask = scores > 0

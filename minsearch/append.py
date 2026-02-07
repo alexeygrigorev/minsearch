@@ -1,22 +1,21 @@
 import re
 import math
 from datetime import date, datetime
+from pathlib import Path
 
 from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 
+from .filters import Filter
 
-# Operator mapping for range filters
-OPERATORS = {
-    '>=': lambda a, b: a >= b,
-    '>': lambda a, b: a > b,
-    '<=': lambda a, b: a <= b,
-    '<': lambda a, b: a < b,
-    '==': lambda a, b: a == b,
-    '!=': lambda a, b: a != b,
-}
+
+def _load_stop_words():
+    """Load stop words from the stop_words.txt file."""
+    stop_words_file = Path(__file__).parent / "stop_words.txt"
+    with open(stop_words_file) as f:
+        return set(line.strip() for line in f if line.strip())
 
 
 class Tokenizer:
@@ -24,184 +23,6 @@ class Tokenizer:
     A custom tokenizer that splits text into tokens and removes stop words.
     Mimics sklearn's default tokenizer behavior.
     """
-
-    # Common English stop words (similar to sklearn's default)
-    DEFAULT_STOP_WORDS = {
-        "a",
-        "about",
-        "above",
-        "after",
-        "again",
-        "against",
-        "all",
-        "am",
-        "an",
-        "and",
-        "any",
-        "are",
-        "aren't",
-        "as",
-        "at",
-        "be",
-        "because",
-        "been",
-        "before",
-        "being",
-        "below",
-        "between",
-        "both",
-        "but",
-        "by",
-        "can't",
-        "cannot",
-        "could",
-        "couldn't",
-        "did",
-        "didn't",
-        "do",
-        "does",
-        "doesn't",
-        "doing",
-        "don't",
-        "down",
-        "during",
-        "each",
-        "few",
-        "for",
-        "from",
-        "further",
-        "had",
-        "hadn't",
-        "has",
-        "hasn't",
-        "have",
-        "haven't",
-        "having",
-        "he",
-        "he'd",
-        "he'll",
-        "he's",
-        "her",
-        "here",
-        "here's",
-        "hers",
-        "herself",
-        "him",
-        "himself",
-        "his",
-        "how",
-        "how's",
-        "i",
-        "i'd",
-        "i'll",
-        "i'm",
-        "i've",
-        "if",
-        "in",
-        "into",
-        "is",
-        "isn't",
-        "it",
-        "it's",
-        "its",
-        "itself",
-        "let's",
-        "me",
-        "more",
-        "most",
-        "mustn't",
-        "my",
-        "myself",
-        "no",
-        "nor",
-        "not",
-        "of",
-        "off",
-        "on",
-        "once",
-        "only",
-        "or",
-        "other",
-        "ought",
-        "our",
-        "ours",
-        "ourselves",
-        "out",
-        "over",
-        "own",
-        "same",
-        "shan't",
-        "she",
-        "she'd",
-        "she'll",
-        "she's",
-        "should",
-        "shouldn't",
-        "so",
-        "some",
-        "such",
-        "than",
-        "that",
-        "that's",
-        "the",
-        "their",
-        "theirs",
-        "them",
-        "themselves",
-        "then",
-        "there",
-        "there's",
-        "these",
-        "they",
-        "they'd",
-        "they'll",
-        "they're",
-        "they've",
-        "this",
-        "those",
-        "through",
-        "to",
-        "too",
-        "under",
-        "until",
-        "up",
-        "very",
-        "was",
-        "wasn't",
-        "we",
-        "we'd",
-        "we'll",
-        "we're",
-        "we've",
-        "were",
-        "weren't",
-        "what",
-        "what's",
-        "when",
-        "when's",
-        "where",
-        "where's",
-        "which",
-        "while",
-        "who",
-        "who's",
-        "whom",
-        "why",
-        "why's",
-        "with",
-        "won't",
-        "would",
-        "wouldn't",
-        "you",
-        "you'd",
-        "you'll",
-        "you're",
-        "you've",
-        "your",
-        "yours",
-        "yourself",
-        "yourselves",
-    }
 
     def __init__(self, pattern=r"[\s\W\d]+", stop_words=None):
         """
@@ -214,7 +35,7 @@ class Tokenizer:
                                     English stop words. If empty set, no stop words are removed.
         """
         self.pattern = pattern
-        self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
+        self.stop_words = _load_stop_words() if stop_words is None else stop_words
 
     def tokenize(self, text):
         """
@@ -275,9 +96,9 @@ class AppendableIndex:
                                     English stop words. If empty set, no stop words are removed.
         """
         self.text_fields = text_fields
-        self.keyword_fields = keyword_fields if keyword_fields is not None else []
-        self.numeric_fields = numeric_fields if numeric_fields is not None else []
-        self.date_fields = date_fields if date_fields is not None else []
+        self.keyword_fields = keyword_fields or []
+        self.numeric_fields = numeric_fields or []
+        self.date_fields = date_fields or []
 
         # Initialize data structures
         self.docs = []
@@ -293,6 +114,17 @@ class AppendableIndex:
 
         # Initialize tokenizer with stop words
         self.tokenizer = Tokenizer(stop_words=stop_words)
+
+        # Initialize the filter with empty data (will be updated on fit/append)
+        self._filter = Filter(
+            keyword_fields=self.keyword_fields,
+            numeric_fields=self.numeric_fields,
+            date_fields=self.date_fields,
+            keyword_data={},
+            numeric_data={},
+            date_data={},
+            num_docs=0,
+        )
 
     def _process_text(self, text):
         """Process text into tokens using our custom tokenizer."""
@@ -398,65 +230,6 @@ class AppendableIndex:
             field_scores[doc_id] = np.dot(query_vector, doc_vector)
         return field_scores
 
-    def _apply_keyword_filters(self, scores, filter_dict):
-        """Apply keyword, numeric, and date filters to the scores."""
-        for field, value in filter_dict.items():
-            # Keyword field filters (exact match)
-            if field in self.keyword_fields:
-                if value is None:
-                    mask = np.array([val is None for val in self.keyword_data[field]])
-                else:
-                    mask = np.array([val == value for val in self.keyword_data[field]])
-                scores = scores * mask
-
-            # Numeric field filters (exact match or range comparisons)
-            elif field in self.numeric_fields:
-                if value is None:
-                    # Filter for None values
-                    mask = np.array([val is None for val in self.numeric_data[field]])
-                    scores = scores * mask
-                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
-                    # Range filter: [('>=', 10), ('<', 20)]
-                    mask = np.ones(len(self.docs), dtype=bool)
-                    for op, op_value in value:
-                        if op in OPERATORS and op_value is not None:
-                            series_mask = np.array([OPERATORS[op](val, op_value) if val is not None else False
-                                                    for val in self.numeric_data[field]])
-                            mask = mask & series_mask
-                    scores = scores * mask
-                else:
-                    # Exact match
-                    mask = np.array([val == value for val in self.numeric_data[field]])
-                    scores = scores * mask
-
-            # Date field filters (exact match or range comparisons)
-            elif field in self.date_fields:
-                if value is None:
-                    # Filter for None values
-                    mask = np.array([val is None for val in self.date_data[field]])
-                    scores = scores * mask
-                elif isinstance(value, list) and all(isinstance(v, tuple) and len(v) == 2 for v in value):
-                    # Range filter: [('>=', date), ('<', date)]
-                    mask = np.ones(len(self.docs), dtype=bool)
-                    for op, op_value in value:
-                        if op in OPERATORS and op_value is not None:
-                            # Convert date/datetime to pandas Timestamp for comparison
-                            if isinstance(op_value, (date, datetime)):
-                                op_value = pd.Timestamp(op_value)
-                            series_mask = np.array([OPERATORS[op](val, op_value)
-                                                    if val is not None else False
-                                                    for val in self.date_data[field]])
-                            mask = mask & series_mask
-                    scores = scores * mask
-                else:
-                    # Exact match (convert date/datetime to Timestamp)
-                    if isinstance(value, (date, datetime)):
-                        value = pd.Timestamp(value)
-                    mask = np.array([val == value for val in self.date_data[field]])
-                    scores = scores * mask
-
-        return scores
-
     def _get_top_results(self, scores, num_results):
         """Get top scoring documents based on the scores."""
         # Get number of non-zero scores
@@ -518,6 +291,17 @@ class AppendableIndex:
                     "empty vocabulary; perhaps the documents only contain stop words"
                 )
 
+        # Initialize the filter
+        self._filter = Filter(
+            keyword_fields=self.keyword_fields,
+            numeric_fields=self.numeric_fields,
+            date_fields=self.date_fields,
+            keyword_data=self.keyword_data,
+            numeric_data=self.numeric_data,
+            date_data=self.date_data,
+            num_docs=len(self.docs),
+        )
+
         return self
 
     def append(self, doc):
@@ -551,6 +335,14 @@ class AppendableIndex:
             else:
                 self.date_data[field].append(value)
 
+        # Update the filter
+        self._filter.refresh(
+            keyword_data=self.keyword_data,
+            numeric_data=self.numeric_data,
+            date_data=self.date_data,
+            num_docs=len(self.docs),
+        )
+
         return self
 
     def search(
@@ -574,7 +366,7 @@ class AppendableIndex:
             filter_dict = {}
         if boost_dict is None:
             boost_dict = {}
-            
+
         if not self.docs:
             return []
 
@@ -606,8 +398,9 @@ class AppendableIndex:
             boost = boost_dict.get(field, 1)
             scores += field_scores * boost
 
-        # Apply keyword filters
-        scores = self._apply_keyword_filters(scores, filter_dict)
+        # Apply filters using the Filter object
+        filter_mask = self._filter.apply(filter_dict)
+        scores = scores * filter_mask
 
         # Get top results
         top_indices = self._get_top_results(scores, num_results)
