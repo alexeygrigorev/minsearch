@@ -8,7 +8,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
-from .filters import Filter
+from .filters import Filter, FieldData
 
 
 def _load_stop_words():
@@ -117,12 +117,9 @@ class AppendableIndex:
 
         # Initialize the filter with empty data (will be updated on fit/append)
         self._filter = Filter(
-            keyword_fields=self.keyword_fields,
-            numeric_fields=self.numeric_fields,
-            date_fields=self.date_fields,
-            keyword_data={},
-            numeric_data={},
-            date_data={},
+            keyword=FieldData(fields=self.keyword_fields, data={}),
+            numeric=FieldData(fields=self.numeric_fields, data={}),
+            date=FieldData(fields=self.date_fields, data={}),
             num_docs=0,
         )
 
@@ -293,12 +290,9 @@ class AppendableIndex:
 
         # Initialize the filter
         self._filter = Filter(
-            keyword_fields=self.keyword_fields,
-            numeric_fields=self.numeric_fields,
-            date_fields=self.date_fields,
-            keyword_data=self.keyword_data,
-            numeric_data=self.numeric_data,
-            date_data=self.date_data,
+            keyword=FieldData(fields=self.keyword_fields, data=self.keyword_data),
+            numeric=FieldData(fields=self.numeric_fields, data=self.numeric_data),
+            date=FieldData(fields=self.date_fields, data=self.date_data),
             num_docs=len(self.docs),
         )
 

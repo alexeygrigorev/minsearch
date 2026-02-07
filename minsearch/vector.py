@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from sklearn.metrics.pairwise import cosine_similarity
 
-from .filters import Filter
+from .filters import Filter, FieldData
 
 
 class VectorSearch:
@@ -35,12 +35,9 @@ class VectorSearch:
         self.docs = []  # List of documents (payload)
         # Initialize the filter with empty data (will be updated on fit/append)
         self._filter = Filter(
-            keyword_fields=self.keyword_fields,
-            numeric_fields=self.numeric_fields,
-            date_fields=self.date_fields,
-            keyword_data={},
-            numeric_data={},
-            date_data={},
+            keyword=FieldData(fields=self.keyword_fields, data={}),
+            numeric=FieldData(fields=self.numeric_fields, data={}),
+            date=FieldData(fields=self.date_fields, data={}),
             num_docs=0,
         )
         
@@ -82,12 +79,9 @@ class VectorSearch:
 
         # Initialize the filter
         self._filter = Filter(
-            keyword_fields=self.keyword_fields,
-            numeric_fields=self.numeric_fields,
-            date_fields=self.date_fields,
-            keyword_data=self.keyword_df,
-            numeric_data=self.numeric_df,
-            date_data=self.date_df,
+            keyword=FieldData(fields=self.keyword_fields, data=self.keyword_df),
+            numeric=FieldData(fields=self.numeric_fields, data=self.numeric_df),
+            date=FieldData(fields=self.date_fields, data=self.date_df),
             num_docs=len(self.docs),
         )
 

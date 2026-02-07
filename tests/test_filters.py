@@ -19,6 +19,8 @@ from minsearch.filters import (
     FilterValidationError,
     PandasMasker,
     DictMasker,
+    Filter,
+    FieldData,
 )
 
 
@@ -242,4 +244,97 @@ class TestDictMasker:
         end = date(2024, 3, 1)
         conditions = [Condition(Operator.GREATER_EQUAL, start), Condition(Operator.LESS_EQUAL, end)]
         mask = self.masker.range_mask('created', conditions)
+        np.testing.assert_array_equal(mask, [0, 1, 1])
+
+
+class TestFilter:
+    def setup_method(self):
+        self.keyword_df = pd.DataFrame({
+            'category': ['tech', 'tech', 'health'],
+            'status': ['active', None, 'active']
+        })
+        self.numeric_df = pd.DataFrame({
+            'price': [100, 200, 50],
+            'quantity': [10, None, 5]
+        })
+        self.date_df = pd.DataFrame({
+            'created': pd.to_datetime(['2024-01-01', '2024-02-01', '2024-03-01']),
+            'updated': [datetime(2024, 1, 15), None, datetime(2024, 3, 15)]
+        })
+        self.filter = Filter(
+            keyword=FieldData(fields=['category', 'status'], data=self.keyword_df),
+            numeric=FieldData(fields=['price', 'quantity'], data=self.numeric_df),
+            date=FieldData(fields=['created', 'updated'], data=self.date_df),
+        )
+
+    def test_apply_empty_filter(self):
+        mask = self.filter.apply({})
+        np.testing.assert_array_equal(mask, [1, 1, 1])
+
+    def test_apply_keyword_filter(self):
+        mask = self.filter.apply({'category': 'tech'})
+        np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_apply_numeric_exact_filter(self):
+        mask = self.filter.apply({'price': 100})
+        np.testing.assert_array_equal(mask, [1, 0, 0])
+
+    def test_apply_numeric_range_filter(self):
+        mask = self.filter.apply({'price': [('>=', 50), ('<', 150)]})
+        np.testing.assert_array_equal(mask, [1, 0, 1])
+
+    def test_apply_date_exact_filter(self):
+        mask = self.filter.apply({'created': date(2024, 2, 1)})
+        np.testing.assert_array_equal(mask, [0, 1, 0])
+
+    def test_apply_none_filter(self):
+        mask = self.filter.apply({'status': None})
+        np.testing.assert_array_equal(mask, [0, 1, 0])
+
+    def test_apply_multiple_filters(self):
+        mask = self.filter.apply({
+            'category': 'tech',
+            'price': [('>=', 50), ('<', 150)]
+        })
+        np.testing.assert_array_equal(mask, [1, 0, 0])
+
+    def test_refresh(self):
+        new_numeric_df = pd.DataFrame({'price': [150, 250, 75], 'quantity': [15, 25, 35]})
+        self.filter.refresh(numeric_data=new_numeric_df, num_docs=3)
+        mask = self.filter.apply({'price': 150})
+        np.testing.assert_array_equal(mask, [1, 0, 0])
+
+
+class TestFilterWithDictData:
+    def setup_method(self):
+        self.keyword_data = {
+            'category': ['tech', 'tech', 'health'],
+            'status': ['active', None, 'active']
+        }
+        self.numeric_data = {
+            'price': [100, 200, 50],
+            'quantity': [10, None, 5]
+        }
+        self.date_data = {
+            'created': [date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1)],
+            'updated': [datetime(2024, 1, 15), None, datetime(2024, 3, 15)]
+        }
+        self.filter = Filter(
+            keyword=FieldData(fields=['category', 'status'], data=self.keyword_data),
+            numeric=FieldData(fields=['price', 'quantity'], data=self.numeric_data),
+            date=FieldData(fields=['created', 'updated'], data=self.date_data),
+        )
+
+    def test_apply_keyword_filter_dict(self):
+        mask = self.filter.apply({'category': 'tech'})
+        np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_apply_numeric_range_filter_dict(self):
+        mask = self.filter.apply({'price': [('>=', 50), ('<', 150)]})
+        np.testing.assert_array_equal(mask, [1, 0, 1])
+
+    def test_apply_date_range_filter_dict(self):
+        start = date(2024, 2, 1)
+        end = date(2024, 3, 1)
+        mask = self.filter.apply({'created': [('>=', start), ('<=', end)]})
         np.testing.assert_array_equal(mask, [0, 1, 1])

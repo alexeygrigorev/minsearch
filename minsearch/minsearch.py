@@ -6,7 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from datetime import date, datetime
 
-from .filters import Filter
+from .filters import Filter, FieldData
 
 
 class Index:
@@ -113,12 +113,9 @@ class Index:
 
         # Initialize the filter
         self._filter = Filter(
-            keyword_fields=self.keyword_fields,
-            numeric_fields=self.numeric_fields,
-            date_fields=self.date_fields,
-            keyword_data=self.keyword_df,
-            numeric_data=self.numeric_df,
-            date_data=self.date_df,
+            keyword=FieldData(fields=self.keyword_fields, data=self.keyword_df),
+            numeric=FieldData(fields=self.numeric_fields, data=self.numeric_df),
+            date=FieldData(fields=self.date_fields, data=self.date_df),
             num_docs=len(self.docs),
         )
 

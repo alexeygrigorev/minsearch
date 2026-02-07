@@ -17,6 +17,7 @@ from .query import (
 )
 from .masker import Masker, PandasMasker, DictMasker
 from .validator import Validator, FilterValidationError
+from .field import FieldData
 
 
 class Filter:
@@ -26,27 +27,28 @@ class Filter:
 
     def __init__(
         self,
-        keyword_fields: list[str],
-        numeric_fields: list[str],
-        date_fields: list[str],
-        keyword_data: dict[str, list] | pd.DataFrame,
-        numeric_data: dict[str, list] | pd.DataFrame,
-        date_data: dict[str, list] | pd.DataFrame,
-        num_docs: int,
+        keyword: FieldData,
+        numeric: FieldData,
+        date: FieldData,
+        num_docs: int | None = None,
     ):
-        self.validator = Validator(keyword_fields, numeric_fields, date_fields)
-        self.num_docs = num_docs
+        self.keyword = keyword
+        self.numeric = numeric
+        self.date = date
+        # Use provided num_docs, or fall back to keyword data size
+        self.num_docs = num_docs if num_docs is not None else keyword.num_docs
 
-        self.keyword_data = keyword_data
-        self.numeric_data = numeric_data
-        self.date_data = date_data
+        self.validator = Validator(keyword.fields, numeric.fields, date.fields)
 
     def _create_masker(self, data: dict | pd.DataFrame) -> Masker:
         """Create masker based on data type."""
+        # Calculate num_docs from the actual data
         if isinstance(data, pd.DataFrame):
-            return PandasMasker(data, self.num_docs)
+            num_docs = len(data)
+            return PandasMasker(data, num_docs)
         else:
-            return DictMasker(data, self.num_docs)
+            num_docs = len(next(iter(data.values()))) if data else 0
+            return DictMasker(data, num_docs)
 
     def refresh(
         self,
@@ -55,13 +57,13 @@ class Filter:
         date_data: dict | pd.DataFrame | None = None,
         num_docs: int | None = None,
     ) -> None:
-        """Refresh the filter with updated data references."""
+        """Refresh the filter with updated field data."""
         if keyword_data is not None:
-            self.keyword_data = keyword_data
+            self.keyword = FieldData(fields=self.keyword.fields, data=keyword_data)
         if numeric_data is not None:
-            self.numeric_data = numeric_data
+            self.numeric = FieldData(fields=self.numeric.fields, data=numeric_data)
         if date_data is not None:
-            self.date_data = date_data
+            self.date = FieldData(fields=self.date.fields, data=date_data)
         if num_docs is not None:
             self.num_docs = num_docs
 
@@ -75,7 +77,10 @@ class Filter:
 
     def _apply_validated(self, validated: ValidatedFilter) -> np.ndarray:
         """Apply a validated filter object and return a boolean mask."""
-        mask = np.ones(self.num_docs, dtype=float)
+        # Determine num_docs from the first non-empty data source
+        num_docs = self._get_num_docs()
+
+        mask = np.ones(num_docs, dtype=float)
 
         mask = mask * self._apply_keyword(validated.keyword_queries, mask)
         mask = mask * self._apply_numeric(validated.numeric_queries, mask)
@@ -83,15 +88,25 @@ class Filter:
 
         return mask
 
+    def _get_num_docs(self) -> int:
+        """Get the number of documents from the first non-empty data source."""
+        if self.keyword.num_docs > 0:
+            return self.keyword.num_docs
+        if self.numeric.num_docs > 0:
+            return self.numeric.num_docs
+        if self.date.num_docs > 0:
+            return self.date.num_docs
+        return 0
+
     def _apply_keyword(self, queries: list[KeywordQuery], mask: np.ndarray) -> np.ndarray:
-        masker = self._create_masker(self.keyword_data)
+        masker = self._create_masker(self.keyword.data)
         for query in queries:
             field_mask = masker.match_mask(query.field, query.value)
             mask = mask * field_mask
         return mask
 
     def _apply_numeric(self, queries: list[NumericExactQuery | NumericRangeQuery], mask: np.ndarray) -> np.ndarray:
-        masker = self._create_masker(self.numeric_data)
+        masker = self._create_masker(self.numeric.data)
         for query in queries:
             if isinstance(query, NumericRangeQuery):
                 field_mask = masker.range_mask(query.field, query.conditions)
@@ -101,7 +116,7 @@ class Filter:
         return mask
 
     def _apply_date(self, queries: list[DateExactQuery | DateRangeQuery], mask: np.ndarray) -> np.ndarray:
-        masker = self._create_masker(self.date_data)
+        masker = self._create_masker(self.date.data)
         for query in queries:
             if isinstance(query, DateRangeQuery):
                 field_mask = masker.range_mask(query.field, query.conditions)

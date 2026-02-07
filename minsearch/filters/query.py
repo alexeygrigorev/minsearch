@@ -82,7 +82,9 @@ class ValidatedFilter:
     """
     Structured representation of a validated filter.
 
-    Created by Filter.validate() and consumed by Filter._apply_validated().
+    Created by Validator.validate() from a raw filter dictionary.
+    Contains categorized query objects (KeywordQuery, NumericExactQuery, NumericRangeQuery,
+    DateExactQuery, DateRangeQuery) for applying filters.
     """
     keyword_queries: list[KeywordQuery]
     numeric_queries: list[NumericExactQuery | NumericRangeQuery]

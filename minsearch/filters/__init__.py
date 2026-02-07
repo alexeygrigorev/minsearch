@@ -13,6 +13,7 @@ from .query import (
     Condition,
     Operator,
 )
+from .field import FieldData
 from .filter import Filter
 from .validator import Validator, FilterValidationError
 from .masker import Masker, PandasMasker, DictMasker
@@ -26,6 +27,7 @@ __all__ = [
     "ValidatedFilter",
     "Condition",
     "Operator",
+    "FieldData",
     "Filter",
     "Validator",
     "FilterValidationError",
