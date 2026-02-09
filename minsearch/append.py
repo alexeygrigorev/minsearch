@@ -1,21 +1,12 @@
 import re
 import math
+from collections import defaultdict, Counter
+from typing import Dict, List, Set, Optional
 from datetime import date, datetime
-from pathlib import Path
-
-from collections import defaultdict
-
 import numpy as np
 import pandas as pd
 
 from .filters import Filter, FieldData
-
-
-def _load_stop_words():
-    """Load stop words from the stop_words.txt file."""
-    stop_words_file = Path(__file__).parent / "stop_words.txt"
-    with open(stop_words_file) as f:
-        return set(line.strip() for line in f if line.strip())
 
 
 class Tokenizer:
@@ -24,39 +15,58 @@ class Tokenizer:
     Mimics sklearn's default tokenizer behavior.
     """
 
-    def __init__(self, pattern=r"[\s\W\d]+", stop_words=None):
+    # Common English stop words (similar to sklearn's default)
+    DEFAULT_STOP_WORDS = {
+        "a", "about", "above", "after", "again", "against", "all", "am", "an",
+        "and", "any", "are", "aren't", "as", "at", "be", "because", "been",
+        "before", "being", "below", "between", "both", "but", "by", "can't",
+        "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
+        "doing", "don't", "down", "during", "each", "few", "for", "from",
+        "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having",
+        "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
+        "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
+        "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
+        "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor",
+        "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our",
+        "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
+        "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
+        "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
+        "then", "there", "there's", "these", "they", "they'd", "they'll", "they're",
+        "they've", "this", "those", "through", "to", "too", "under", "until", "up",
+        "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
+        "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
+        "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would",
+        "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours",
+        "yourself", "yourselves",
+    }
+
+    def __init__(self, pattern: str = r"[\s\W\d]+", stop_words: Optional[Set[str]] = None):
         """
         Initialize the tokenizer with a regex pattern and stop words.
 
         Args:
-            pattern (str): Regex pattern to split text on. Default pattern splits on
-                          whitespace, non-word characters, and digits.
-            stop_words (set or None): Set of stop words to remove. If None, uses default
-                                    English stop words. If empty set, no stop words are removed.
+            pattern: Regex pattern to split text on.
+            stop_words: Set of stop words to remove. If None, uses defaults.
         """
-        self.pattern = pattern
-        self.stop_words = _load_stop_words() if stop_words is None else stop_words
+        self.pattern = re.compile(pattern)
+        self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
 
-    def tokenize(self, text):
+    def tokenize(self, text: str) -> List[str]:
         """
         Tokenize the input text and remove stop words.
 
         Args:
-            text (str): Text to tokenize
+            text: Text to tokenize
 
         Returns:
-            list: List of tokens with stop words removed
+            List of tokens with stop words removed
         """
         if not text:
             return []
 
-        # Convert to lowercase
         text = text.lower()
+        tokens = [token for token in self.pattern.split(text) if token]
 
-        # Split on the pattern and filter out empty strings
-        tokens = [token for token in re.split(self.pattern, text) if token]
-
-        # Remove stop words if any are specified
         if self.stop_words:
             tokens = [token for token in tokens if token not in self.stop_words]
 
@@ -65,54 +75,100 @@ class Tokenizer:
 
 class AppendableIndex:
     """
-    An appendable search index using inverted index for text fields, exact matching for keyword fields,
-    and range filters for numeric and date fields.
-    Maintains the same interface as the original Index class but allows for appending documents.
+    An appendable search index using inverted index for text fields,
+    exact matching for keyword fields, and range filters for numeric and date fields.
+
+    Performance optimizations:
+    - Caches tokenized documents to avoid re-tokenization during search
+    - Uses sets for inverted index (no duplicates, O(1) doc frequency)
+    - Pre-computes IDF values for all tokens
 
     Attributes:
-        text_fields (list): List of text field names to index.
-        keyword_fields (list): List of keyword field names to index.
-        numeric_fields (list): List of numeric field names to index.
-        date_fields (list): List of date field names to index.
-        keyword_data (dict): Dictionary containing keyword field data as lists.
-        numeric_data (dict): Dictionary containing numeric field data as lists.
-        date_data (dict): Dictionary containing date field data as lists.
-        docs (list): List of documents indexed.
-        inverted_index (dict): Dictionary of inverted indices for each text field.
-        doc_frequencies (dict): Dictionary of document frequencies for each text field.
-        total_docs (int): Total number of documents in the index.
+        text_fields: List of text field names to index.
+        keyword_fields: List of keyword field names to index.
+        numeric_fields: List of numeric field names to index.
+        date_fields: List of date field names to index.
+        docs: List of documents indexed.
+        inverted_index: Dict mapping field -> token -> set of doc IDs.
+        doc_frequencies: Dict mapping field -> token -> document frequency.
+        idf: Dict mapping field -> token -> pre-computed IDF value.
+        doc_tokens: Dict mapping field -> doc_id -> list of tokens (cached).
+        total_docs: Total number of documents in the index.
     """
 
-    def __init__(self, text_fields, keyword_fields=None, numeric_fields=None, date_fields=None, stop_words=None):
+    def __init__(
+        self,
+        text_fields: List[str],
+        keyword_fields: Optional[List[str]] = None,
+        numeric_fields: Optional[List[str]] = None,
+        date_fields: Optional[List[str]] = None,
+        stop_words: Optional[Set[str]] = None,
+    ):
         """
-        Initializes the AppendableIndex with specified text, keyword, numeric, and date fields.
+        Initialize the AppendableIndex.
 
         Args:
-            text_fields (list): List of text field names to index.
-            keyword_fields (list, optional): List of keyword field names to index. Defaults to empty list.
-            numeric_fields (list, optional): List of numeric field names to index. Defaults to empty list.
-            date_fields (list, optional): List of date field names to index. Defaults to empty list.
-            stop_words (set or None): Set of stop words to remove. If None, uses default
-                                    English stop words. If empty set, no stop words are removed.
+            text_fields: List of text field names to index.
+            keyword_fields: List of keyword field names to index.
+            numeric_fields: List of numeric field names to index.
+            date_fields: List of date field names to index.
+            stop_words: Set of stop words to remove.
         """
         self.text_fields = text_fields
-        self.keyword_fields = keyword_fields or []
-        self.numeric_fields = numeric_fields or []
-        self.date_fields = date_fields or []
+        self.keyword_fields = keyword_fields if keyword_fields is not None else []
+        self.numeric_fields = numeric_fields if numeric_fields is not None else []
+        self.date_fields = date_fields if date_fields is not None else []
 
         # Initialize data structures
         self.docs = []
         self.total_docs = 0
-        self.inverted_index = {field: defaultdict(list) for field in text_fields}
-        self.doc_frequencies = {field: defaultdict(int) for field in text_fields}
-        self.keyword_data = {field: [] for field in self.keyword_fields}
-        self.numeric_data = {field: [] for field in self.numeric_fields}
-        self.date_data = {field: [] for field in self.date_fields}
 
-        # Store vocabulary for each field
-        self.vocabularies = {field: set() for field in text_fields}
+        # Use sets for inverted index (no duplicates, O(1) insert)
+        self.inverted_index: Dict[str, Dict[str, Set[int]]] = {
+            field: defaultdict(set) for field in text_fields
+        }
 
-        # Initialize tokenizer with stop words
+        # Document frequencies (now just counting unique docs)
+        self.doc_frequencies: Dict[str, Dict[str, int]] = {
+            field: defaultdict(int) for field in text_fields
+        }
+
+        # Pre-computed IDF values (computed after fit)
+        self.idf: Dict[str, Dict[str, float]] = {
+            field: {} for field in text_fields
+        }
+
+        # Cached tokenized documents per field
+        self.doc_tokens: Dict[str, Dict[int, List[str]]] = {
+            field: {} for field in text_fields
+        }
+
+        # Pre-computed token counts per document (for faster scoring)
+        self.doc_token_counts: Dict[str, Dict[int, Dict[str, int]]] = {
+            field: {} for field in text_fields
+        }
+
+        # Keyword data storage
+        self.keyword_data: Dict[str, List] = {
+            field: [] for field in self.keyword_fields
+        }
+
+        # Numeric data storage
+        self.numeric_data: Dict[str, List] = {
+            field: [] for field in self.numeric_fields
+        }
+
+        # Date data storage
+        self.date_data: Dict[str, List] = {
+            field: [] for field in self.date_fields
+        }
+
+        # Vocabularies for validation
+        self.vocabularies: Dict[str, Set[str]] = {
+            field: set() for field in text_fields
+        }
+
+        # Initialize tokenizer
         self.tokenizer = Tokenizer(stop_words=stop_words)
 
         # Initialize the filter with empty data (will be updated on fit/append)
@@ -123,140 +179,176 @@ class AppendableIndex:
             num_docs=0,
         )
 
-    def _process_text(self, text):
+    def _process_text(self, text: str) -> List[str]:
         """Process text into tokens using our custom tokenizer."""
         return self.tokenizer.tokenize(text)
 
-    def _update_inverted_index(self, doc_id, field, text):
-        """Update the inverted index for a given field and document."""
-        tokens = self._process_text(text)
-        if not tokens:  # Skip empty documents
-            return
+    def _compute_idf(self, field: str, doc_frequency: int) -> float:
+        """Compute IDF for a token given its document frequency."""
+        return math.log((self.total_docs + 1) / (doc_frequency + 1)) + 1
 
+    def _update_inverted_index(self, doc_id: int, field: str, text: str) -> List[str]:
+        """
+        Update the inverted index for a given field and document.
+
+        Returns the tokenized document for caching.
+        """
+        tokens = self._process_text(text)
+        if not tokens:
+            return tokens
+
+        # Cache tokenized document
+        self.doc_tokens[field][doc_id] = tokens
+
+        # Pre-compute token counts for faster scoring
+        token_counts = Counter(tokens)
+        self.doc_token_counts[field][doc_id] = dict(token_counts)
+
+        # Update inverted index with sets (no duplicates)
         for token in tokens:
-            self.inverted_index[field][token].append(doc_id)
+            self.inverted_index[field][token].add(doc_id)
+
+        # After all updates, recompute doc frequencies from actual set sizes
+        for token in set(tokens):  # unique tokens in this doc
             self.doc_frequencies[field][token] = len(
-                set(self.inverted_index[field][token])
+                self.inverted_index[field][token]
             )
             self.vocabularies[field].add(token)
 
-    def _calculate_tfidf(self, field, token, doc_id):
-        """Calculate TF-IDF score for a token in a document."""
-        # Term frequency (TF)
-        doc_tokens = self._process_text(self.docs[doc_id].get(field, ""))
-        if not doc_tokens:  # Handle empty documents
-            return 0
+        return tokens
 
-        # Use sublinear TF scaling like scikit-learn
-        tf = 1 + math.log(doc_tokens.count(token)) if doc_tokens.count(token) > 0 else 0
+    def _finalize_index(self):
+        """
+        Finalize the index after fit/append operations.
+        Pre-computes IDF values for all tokens and updates the filter.
+        """
+        for field in self.text_fields:
+            self.idf[field] = {}
+            for token, df in self.doc_frequencies[field].items():
+                self.idf[field][token] = self._compute_idf(field, df)
 
-        # Inverse document frequency (IDF)
-        df = self.doc_frequencies[field][token]
-        idf = math.log((self.total_docs + 1) / (df + 1)) + 1
-
-        return tf * idf
-
-    def _get_matching_documents(self, field, tokens):
-        """Get set of document IDs that match any of the given tokens in the field."""
+    def _get_matching_documents(self, field: str, tokens: List[str]) -> Set[int]:
+        """Get set of document IDs that match any of the given tokens."""
         matching_docs = set()
         for token in tokens:
             if token in self.inverted_index[field]:
                 matching_docs.update(self.inverted_index[field][token])
         return matching_docs
 
-    def _create_query_vector(self, field, query_tokens):
-        """Create and normalize TF-IDF vector for the query in the given field."""
-        # Get unique query tokens that exist in this field
+    def _create_query_vector(
+        self, field: str, query_tokens: List[str]
+    ) -> Optional[tuple[np.ndarray, List[str]]]:
+        """
+        Create and normalize TF-IDF vector for the query.
+
+        Returns:
+            (query_vector, field_tokens) or (None, None) if no matches
+        """
+        # Filter to tokens that exist in our index
         field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
         if not field_tokens:
             return None, None
 
+        # Count query tokens once (O(n) instead of O(n^2))
+        query_token_counts = Counter(query_tokens)
+
         # Calculate query vector
         query_vector = np.zeros(len(field_tokens))
         for i, token in enumerate(field_tokens):
-            # Calculate TF-IDF for query token
-            tf = (
-                1 + math.log(query_tokens.count(token))
-                if query_tokens.count(token) > 0
-                else 0
-            )
-            df = self.doc_frequencies[field][token]
-            idf = math.log((self.total_docs + 1) / (df + 1)) + 1
+            # TF in query (sublinear TF scaling like sklearn)
+            tf = query_token_counts[token]
+            if tf > 0:
+                tf = 1 + math.log(tf)
+            # Use pre-computed IDF
+            idf = self.idf[field].get(token, 1.0)
             query_vector[i] = tf * idf
 
-        # L2 normalize the query vector
+        # L2 normalize
         query_norm = np.linalg.norm(query_vector)
         if query_norm > 0:
             query_vector = query_vector / query_norm
 
         return query_vector, field_tokens
 
-    def _create_document_vectors(self, field, field_tokens, matching_docs):
-        """Create and normalize TF-IDF vectors for matching documents in the given field."""
-        doc_vectors = {}
-        for doc_id in matching_docs:
-            doc_vector = np.zeros(len(field_tokens))
-            doc_tokens = self._process_text(self.docs[doc_id].get(field, ""))
-            if doc_tokens:
-                # Calculate TF-IDF for each matching token
-                for i, token in enumerate(field_tokens):
-                    if token in doc_tokens:
-                        tfidf = self._calculate_tfidf(field, token, doc_id)
-                        doc_vector[i] = tfidf
+    def _calculate_document_score(
+        self, field: str, doc_id: int, query_vector: np.ndarray, field_tokens: List[str]
+    ) -> float:
+        """
+        Calculate cosine similarity between query and a document.
 
-                # Calculate the FULL document norm using ALL tokens (not just query-matching)
-                # This matches sklearn's behavior where normalization considers all terms
-                full_doc_norm_squared = 0.0
-                # Use set to avoid double-counting tokens (TF-IDF already accounts for term frequency)
-                unique_doc_tokens = set(doc_tokens)
-                for token in unique_doc_tokens:
-                    tfidf = self._calculate_tfidf(field, token, doc_id)
-                    full_doc_norm_squared += tfidf * tfidf
-                full_doc_norm = math.sqrt(full_doc_norm_squared)
+        Uses pre-computed token counts for efficiency.
+        Only considers tokens that are in the query.
+        """
+        # Get pre-computed token counts for this document
+        doc_token_counts = self.doc_token_counts[field].get(doc_id)
+        if not doc_token_counts:
+            return 0.0
 
-                # L2 normalize using the full document norm
-                if full_doc_norm > 0:
-                    doc_vector = doc_vector / full_doc_norm
-                doc_vectors[doc_id] = doc_vector
-        return doc_vectors
+        # Build document vector ONLY for query tokens, compute dot product and norm
+        dot_product = 0.0
+        doc_norm_sq = 0.0
 
-    def _calculate_field_scores(self, query_vector, doc_vectors):
-        """Calculate cosine similarity scores between query and document vectors."""
+        for i, token in enumerate(field_tokens):
+            count = doc_token_counts.get(token)
+            if count is not None:
+                # Sublinear TF scaling
+                tf = 1 + math.log(count)
+                idf = self.idf[field].get(token, 1.0)
+                tfidf = tf * idf
+                dot_product += query_vector[i] * tfidf
+                doc_norm_sq += tfidf * tfidf
+
+        # Cosine similarity (only over query tokens)
+        if doc_norm_sq == 0:
+            return 0.0
+        return dot_product / math.sqrt(doc_norm_sq)
+
+    def _calculate_field_scores(
+        self,
+        field: str,
+        query_vector: np.ndarray,
+        field_tokens: List[str],
+        matching_docs: Set[int],
+    ) -> np.ndarray:
+        """Calculate cosine similarity scores for all matching documents."""
         field_scores = np.zeros(len(self.docs))
-        for doc_id, doc_vector in doc_vectors.items():
-            field_scores[doc_id] = np.dot(query_vector, doc_vector)
+
+        for doc_id in matching_docs:
+            field_scores[doc_id] = self._calculate_document_score(
+                field, doc_id, query_vector, field_tokens
+            )
+
         return field_scores
 
-    def _get_top_results(self, scores, num_results):
-        """Get top scoring documents based on the scores."""
-        # Get number of non-zero scores
-        non_zero_mask = scores > 0
-        non_zero_count = np.sum(non_zero_mask)
-
-        if non_zero_count == 0:
-            return []
-
-        # Ensure num_results doesn't exceed the number of non-zero scores
-        num_results = min(num_results, non_zero_count)
-
-        # Get indices of non-zero scores
-        non_zero_indices = np.where(non_zero_mask)[0]
-
-        # Sort non-zero scores in descending order
-        sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
-
-        # Take top num_results
-        return sorted_indices[:num_results]
-
-    def fit(self, docs):
+    def fit(self, docs: List[Dict]) -> "AppendableIndex":
         """
-        Fits the index with the provided documents.
+        Fit the index with the provided documents.
 
         Args:
-            docs (list of dict): List of documents to index. Each document is a dictionary.
+            docs: List of documents to index. Each document is a dictionary.
+
+        Returns:
+            self
         """
         self.docs = docs
         self.total_docs = len(docs)
+
+        # Clear existing data
+        for field in self.text_fields:
+            self.inverted_index[field] = defaultdict(set)
+            self.doc_frequencies[field] = defaultdict(int)
+            self.doc_tokens[field] = {}
+            self.doc_token_counts[field] = {}
+            self.vocabularies[field] = set()
+
+        for field in self.keyword_fields:
+            self.keyword_data[field] = []
+
+        for field in self.numeric_fields:
+            self.numeric_data[field] = []
+
+        for field in self.date_fields:
+            self.date_data[field] = []
 
         # Process each document
         for doc_id, doc in enumerate(docs):
@@ -280,13 +372,16 @@ class AppendableIndex:
                 else:
                     self.date_data[field].append(value)
 
-        # Only check vocabulary if we have documents
+        # Validate vocabulary
         if self.docs:
             has_vocabulary = any(len(vocab) > 0 for vocab in self.vocabularies.values())
             if not has_vocabulary:
                 raise ValueError(
                     "empty vocabulary; perhaps the documents only contain stop words"
                 )
+
+        # Pre-compute IDF values
+        self._finalize_index()
 
         # Initialize the filter
         self._filter = Filter(
@@ -298,12 +393,18 @@ class AppendableIndex:
 
         return self
 
-    def append(self, doc):
+    def append(self, doc: Dict) -> "AppendableIndex":
         """
-        Appends a single document to the index.
+        Append a single document to the index.
+
+        Note: This re-computes IDF values. For bulk additions, consider
+        creating a new index or batch appending.
 
         Args:
-            doc (dict): Document to append to the index.
+            doc: Document to append to the index.
+
+        Returns:
+            self
         """
         doc_id = len(self.docs)
         self.docs.append(doc)
@@ -329,6 +430,9 @@ class AppendableIndex:
             else:
                 self.date_data[field].append(value)
 
+        # Recompute IDF values
+        self._finalize_index()
+
         # Update the filter
         self._filter.refresh(
             keyword_data=self.keyword_data,
@@ -340,21 +444,25 @@ class AppendableIndex:
         return self
 
     def search(
-        self, query, filter_dict=None, boost_dict=None, num_results=10, output_ids=False
-    ):
+        self,
+        query: str,
+        filter_dict: Optional[Dict] = None,
+        boost_dict: Optional[Dict] = None,
+        num_results: int = 10,
+        output_ids: bool = False,
+    ) -> List[Dict]:
         """
-        Searches the index with the given query, filters, and boost parameters.
+        Search the index with the given query.
 
         Args:
-            query (str): The search query string.
-            filter_dict (dict): Dictionary of keyword fields to filter by.
-            boost_dict (dict): Dictionary of boost scores for text fields.
-            num_results (int): The number of top results to return.
-            output_ids (bool): If True, adds an '_id' field to each document containing its index. Defaults to False.
+            query: The search query string.
+            filter_dict: Dictionary of keyword, numeric, and date fields to filter by.
+            boost_dict: Dictionary of boost scores for text fields.
+            num_results: The number of top results to return.
+            output_ids: If True, adds an '_id' field to each document.
 
         Returns:
-            list of dict: List of documents matching the search criteria, ranked by relevance.
-                         If output_ids is True, each document will have an additional '_id' field.
+            List of documents matching the search criteria, ranked by relevance.
         """
         if filter_dict is None:
             filter_dict = {}
@@ -365,7 +473,7 @@ class AppendableIndex:
             return []
 
         query_tokens = self._process_text(query)
-        if not query_tokens:  # Handle empty queries
+        if not query_tokens:
             return []
 
         scores = np.zeros(len(self.docs))
@@ -377,16 +485,13 @@ class AppendableIndex:
             if query_vector is None:
                 continue
 
-            # Get matching documents
+            # Get matching documents (using sets, fast union)
             matching_docs = self._get_matching_documents(field, field_tokens)
 
-            # Create document vectors
-            doc_vectors = self._create_document_vectors(
-                field, field_tokens, matching_docs
-            )
-
             # Calculate field scores
-            field_scores = self._calculate_field_scores(query_vector, doc_vectors)
+            field_scores = self._calculate_field_scores(
+                field, query_vector, field_tokens, matching_docs
+            )
 
             # Apply boost
             boost = boost_dict.get(field, 1)
@@ -397,7 +502,16 @@ class AppendableIndex:
         scores = scores * filter_mask
 
         # Get top results
-        top_indices = self._get_top_results(scores, num_results)
+        non_zero_mask = scores > 0
+        if not np.any(non_zero_mask):
+            return []
+
+        # Get indices of non-zero scores and sort
+        non_zero_indices = np.where(non_zero_mask)[0]
+        sorted_indices = non_zero_indices[np.argsort(-scores[non_zero_indices])]
+
+        # Take top num_results
+        top_indices = sorted_indices[:num_results]
 
         if output_ids:
             return [{**self.docs[i], "_id": int(i)} for i in top_indices]
