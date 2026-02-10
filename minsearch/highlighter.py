@@ -12,35 +12,41 @@ HighlightFormat = Union[
 
 class Highlighter:
     """
-    A highlighter that extracts relevant snippets from search results.
-
-    Instead of returning full documents, it returns only the portions
-    of text that match the query terms, making it easier to see why
-    a document was returned.
+    A highlighter that processes search results, highlighting specified fields
+    and passing through other fields.
 
     Args:
-        text_fields: List of field names to extract highlights from.
-        snippet_size: Maximum number of characters per snippet.
-        max_snippets: Maximum number of snippets per document.
+        highlight_fields: List of field names to extract highlights from.
+        skip_fields: List of field names to exclude from output.
+        max_matches: Maximum number of matches to return per field (default 5).
+        snippet_size: Maximum characters per match snippet (default 200).
         highlight_format: Format for highlights. Can be:
             - str: Delimiter to wrap both sides ("**" -> **text**)
             - tuple: (open, close) delimiters (("[", "]") -> [text])
             - callable: lambda text: f"__{text}__" -> __text__
-        stop_words: Set of stop words to ignore.
 
     Example:
         >>> from minsearch import Index, Highlighter
-        >>> index = Index(text_fields=['text', 'title'])
+        >>> index = Index(text_fields=['question', 'text'])
         >>> index.fit(docs)
-        >>> highlighter = Highlighter(text_fields=['text', 'title'])
-        >>> results = index.search('search query')
-        >>> highlighted = highlighter.highlight('search query', results)
-        >>> print(highlighted[0]['highlights']['text'])
-        ['...this is a **search** **query** example...']
-
-        Custom format:
-        >>> highlighter = Highlighter(text_fields=['text'], highlight_format='__')
-        >>> # Returns: '...this is a __search__ __query__ example...'
+        >>> highlighter = Highlighter(
+        ...     highlight_fields=['question', 'text'],
+        ...     skip_fields=['course']
+        ... )
+        >>> results = index.search('python machine learning')
+        >>> highlighted = highlighter.highlight('python machine learning', results)
+        >>> print(highlighted[0])
+        {
+            'question': {
+                'matches': ['How do I use **Python** for **machine learning**?'],
+                'total_matches': 2
+            },
+            'text': {
+                'matches': ['**Python** is a programming language...'],
+                'total_matches': 3
+            },
+            'section': 'Programming'  # pass-through
+        }
     """
 
     DEFAULT_STOP_WORDS: Set[str] = {
@@ -69,9 +75,10 @@ class Highlighter:
 
     def __init__(
         self,
-        text_fields: List[str],
+        highlight_fields: List[str],
+        skip_fields: Optional[List[str]] = None,
+        max_matches: int = 5,
         snippet_size: int = 200,
-        max_snippets: int = 3,
         highlight_format: HighlightFormat = "**",
         stop_words: Optional[Set[str]] = None,
     ):
@@ -79,85 +86,79 @@ class Highlighter:
         Initialize the Highlighter.
 
         Args:
-            text_fields: List of field names to extract highlights from.
-            snippet_size: Maximum characters per snippet (window around match).
-            max_snippets: Maximum snippets per document per field.
+            highlight_fields: List of field names to extract highlights from.
+            skip_fields: List of field names to exclude from output.
+            max_matches: Maximum matches to return per field.
+            snippet_size: Maximum characters per match snippet.
             highlight_format: Format for highlights (str, tuple, or callable).
             stop_words: Set of stop words to ignore. If None, uses defaults.
         """
-        self.text_fields = text_fields
+        self.highlight_fields = highlight_fields
+        self.skip_fields = set(skip_fields or [])
+        self.max_matches = max_matches
         self.snippet_size = snippet_size
-        self.max_snippets = max_snippets
         self.highlight_format = highlight_format
         self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
 
     def _apply_highlight(self, text: str) -> str:
-        """
-        Apply highlight formatting to a piece of text.
-
-        Args:
-            text: The text to highlight.
-
-        Returns:
-            Formatted text with highlights applied.
-        """
+        """Apply highlight formatting to a piece of text."""
         fmt = self.highlight_format
 
         if callable(fmt):
             return fmt(text)
 
         if isinstance(fmt, str):
-            # Single delimiter wraps both sides
             return f"{fmt}{text}{fmt}"
 
         if isinstance(fmt, tuple) and len(fmt) == 2:
-            # Tuple with open and close delimiters
             open_delim, close_delim = fmt
             return f"{open_delim}{text}{close_delim}"
 
-        # Fallback to default
         return f"**{text}**"
 
     def _tokenize(self, text: str) -> List[str]:
-        """
-        Tokenize text into lowercase words, removing stop words.
-
-        Args:
-            text: Text to tokenize.
-
-        Returns:
-            List of tokens.
-        """
+        """Tokenize text into lowercase words, removing stop words."""
         pattern = re.compile(r"[\s\W\d]+")
         tokens = [token.lower() for token in pattern.split(text) if token]
         tokens = [token for token in tokens if token not in self.stop_words]
         return tokens
 
-    def _extract_query_terms(self, query: str) -> Set[str]:
+    def _extract_query_terms(self, query: str) -> List[str]:
         """
         Extract meaningful query terms (removing stop words).
 
-        Args:
-            query: Search query string.
-
-        Returns:
-            Set of query terms to highlight.
+        Preserves multi-word phrases and returns terms in order of appearance.
         """
-        return set(self._tokenize(query))
+        # First, try to extract phrases (words in quotes)
+        phrases = []
+        phrase_pattern = re.compile(r'"([^"]+)"')
+        for match in phrase_pattern.finditer(query):
+            phrases.append(match.group(1))
 
-    def _find_match_positions(
-        self, text: str, query_terms: Set[str]
-    ) -> List[tuple[int, int, str]]:
-        """
-        Find all positions where query terms appear in text.
+        # Tokenize the query (without quotes)
+        query_no_quotes = phrase_pattern.sub('', query)
+        tokens = self._tokenize(query_no_quotes)
 
-        Args:
-            text: The text to search in.
-            query_terms: Set of query terms to find.
+        # Combine phrases and tokens, preserving order
+        result = []
+        query_lower = query.lower()
 
-        Returns:
-            List of (start, end, matched_term) tuples, sorted by position.
-        """
+        # Add tokens that appear in the query
+        for token in tokens:
+            if token in query_lower:
+                result.append(token)
+
+        # Add phrases
+        for phrase in phrases:
+            phrase_lower = phrase.lower()
+            # Only add if the phrase actually appears in the query
+            if phrase_lower in query_lower:
+                result.append(phrase_lower)
+
+        return result
+
+    def _find_match_positions(self, text: str, query_terms: List[str]) -> List[tuple[int, int, str]]:
+        """Find all positions where query terms appear in text."""
         if not text:
             return []
 
@@ -165,13 +166,12 @@ class Highlighter:
         matches = []
 
         for term in query_terms:
-            # Find all occurrences of this term
             start = 0
             while True:
                 pos = text_lower.find(term, start)
                 if pos == -1:
                     break
-                # Check if it's a whole word match (word boundary before and after)
+                # Check word boundary
                 before_ok = pos == 0 or not text_lower[pos - 1].isalnum()
                 after_ok = (
                     pos + len(term) >= len(text_lower)
@@ -181,159 +181,118 @@ class Highlighter:
                     matches.append((pos, pos + len(term), term))
                 start = pos + 1
 
-        # Sort by position
         matches.sort(key=lambda x: x[0])
         return matches
 
-    def _merge_overlapping_snippets(
-        self, matches: List[tuple[int, int, str]], text: str
-    ) -> List[str]:
-        """
-        Merge overlapping or nearby matches into snippets.
-
-        Args:
-            matches: List of (start, end, term) tuples.
-            text: Original text.
-
-        Returns:
-            List of highlighted snippet strings.
-        """
+    def _create_snippet(self, text: str, matches: List[tuple[int, int, str]]) -> str:
+        """Create a highlighted snippet from a window of text with matches."""
         if not matches:
-            return []
+            return ""
 
-        snippets = []
-        i = 0
+        # Find the bounds of the snippet centered on first match
+        first_start, first_end, _ = matches[0]
+        window_start = max(0, first_start - self.snippet_size // 2)
+        window_end = min(len(text), first_end + self.snippet_size // 2)
 
-        while i < len(matches) and len(snippets) < self.max_snippets:
-            start, end, _ = matches[i]
+        # Collect all matches within this window
+        window_matches = [
+            m for m in matches
+            if window_start <= m[0] < window_end
+        ]
 
-            # Expand window to snippet_size
-            window_start = max(0, start - self.snippet_size // 2)
-            window_end = min(len(text), end + self.snippet_size // 2)
-
-            # Collect all matches within this window
-            window_matches = []
-            j = i
-            while j < len(matches) and matches[j][0] < window_end:
-                window_matches.append(matches[j])
-                j += 1
-
-            # Create snippet with highlights
-            snippet = self._create_highlighted_snippet(
-                text, window_matches, window_start, window_end
-            )
-            snippets.append(snippet)
-
-            # Move to next window (skip matches we already included)
-            i = j
-
-        return snippets
-
-    def _create_highlighted_snippet(
-        self,
-        text: str,
-        matches: List[tuple[int, int, str]],
-        window_start: int,
-        window_end: int,
-    ) -> str:
-        """
-        Create a highlighted snippet from text with matches.
-
-        Args:
-            text: Original text.
-            matches: List of (start, end, term) tuples within the window.
-            window_start: Start position of window.
-            window_end: End position of window.
-
-        Returns:
-            Highlighted snippet string.
-        """
+        # Extract the window text
         result = text[window_start:window_end]
 
-        # Sort matches by position (reverse order to avoid offset issues)
-        sorted_matches = sorted(matches, key=lambda x: -x[0])
-
-        # Apply highlights (from end to start to preserve positions)
-        for start, end, term in sorted_matches:
-            # Adjust positions relative to window
+        # Apply highlights (reverse order to preserve positions)
+        for start, end, _ in sorted(window_matches, key=lambda x: -x[0]):
             rel_start = start - window_start
             rel_end = end - window_start
-
-            # Extract the actual matched text (preserve original case)
             actual_text = text[start:end]
-
-            # Apply highlight format
             highlighted = self._apply_highlight(actual_text)
             result = result[:rel_start] + highlighted + result[rel_end:]
 
-        # Add ellipsis if needed
+        # Add ellipsis
         prefix = "..." if window_start > 0 else ""
         suffix = "..." if window_end < len(text) else ""
 
         return prefix + result + suffix
 
-    def _highlight_field(
-        self, text: str, query_terms: Set[str]
-    ) -> List[str]:
+    def _highlight_field(self, text: str, query_terms: List[str]) -> Dict:
         """
-        Extract highlighted snippets from a single field.
-
-        Args:
-            text: Text to highlight.
-            query_terms: Query terms to look for.
+        Extract highlighted snippets from a field.
 
         Returns:
-            List of highlighted snippets.
+            Dict with 'matches' (list of snippets) and 'total_matches' (count).
         """
         if not text:
-            return []
+            return {"matches": [], "total_matches": 0}
 
         matches = self._find_match_positions(text, query_terms)
 
         if not matches:
-            return []
+            return {"matches": [], "total_matches": 0}
 
-        return self._merge_overlapping_snippets(matches, text)
+        # Create snippets
+        snippets = []
+        used_matches = []
 
-    def highlight(
-        self,
-        query: str,
-        results: List[Dict],
-        fields: Optional[List[str]] = None,
-    ) -> List[Dict]:
+        for match in matches:
+            if len(snippets) >= self.max_matches:
+                break
+            # Check if this match overlaps with already used matches
+            start, end, _ = match
+            overlaps = any(
+                start < used_end and end > used_start
+                for used_start, used_end, _ in used_matches
+            )
+            if not overlaps:
+                snippet = self._create_snippet(text, [match] + [
+                    m for m in matches
+                    if abs(m[0] - start) < self.snippet_size and m is not match
+                ])
+                if snippet:
+                    snippets.append(snippet)
+                    used_matches.append(match)
+
+        return {
+            "matches": snippets,
+            "total_matches": len(matches)
+        }
+
+    def highlight(self, query: str, results: List[Dict]) -> List[Dict]:
         """
-        Extract highlights from search results.
+        Process search results, highlighting specified fields.
 
         Args:
-            query: The search query that produced these results.
+            query: The search query (can be natural language).
             results: List of documents from search.
-            fields: Optional list of fields to highlight. If None, uses text_fields from init.
 
         Returns:
-            List of dictionaries with 'highlights' key containing highlighted snippets.
-            Each result has: {'highlights': {field: [snippets], ...}, 'document': {...}}
+            List of dictionaries with highlighted fields and pass-through fields.
         """
-        if fields is None:
-            fields = self.text_fields
-
         query_terms = self._extract_query_terms(query)
-
-        if not query_terms:
-            # No meaningful terms, return empty highlights
-            return [{"highlights": {}, "document": doc} for doc in results]
 
         highlighted_results = []
 
         for doc in results:
-            highlights = {}
+            result = {}
 
-            for field in fields:
-                if field in doc and doc[field]:
-                    text = str(doc[field])
-                    snippets = self._highlight_field(text, query_terms)
-                    if snippets:
-                        highlights[field] = snippets
+            for field, value in doc.items():
+                if field in self.skip_fields:
+                    continue
 
-            highlighted_results.append({"highlights": highlights, "document": doc})
+                if field in self.highlight_fields:
+                    # Highlight this field
+                    text = str(value) if value is not None else ""
+                    if query_terms:
+                        result[field] = self._highlight_field(text, query_terms)
+                    else:
+                        # No query terms - return empty structure
+                        result[field] = {"matches": [], "total_matches": 0}
+                else:
+                    # Pass-through
+                    result[field] = value
+
+            highlighted_results.append(result)
 
         return highlighted_results

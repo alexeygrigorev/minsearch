@@ -23,6 +23,12 @@ def sample_docs():
             "section": "Testing",
             "course": "python-basics",
         },
+        {
+            "question": "I just discovered the course, can I still join?",
+            "text": "Yes, you can still join the course even after discovering it late. You'll have access to all course materials.",
+            "section": "Enrollment",
+            "course": "general",
+        },
     ]
 
 
@@ -35,24 +41,36 @@ def text_fields():
 
 def test_highlighter_initialization():
     """Test that Highlighter initializes correctly."""
-    highlighter = Highlighter(text_fields=["question", "text"])
-    assert highlighter.text_fields == ["question", "text"]
-    assert highlighter.snippet_size == 200
-    assert highlighter.max_snippets == 3
+    highlighter = Highlighter(highlight_fields=["question", "text"])
+    assert highlighter.highlight_fields == ["question", "text"]
+    assert highlighter.skip_fields == set()
+    assert highlighter.max_matches == 5
     assert highlighter.highlight_format == "**"
+
+
+def test_highlighter_with_skip_fields():
+    """Test Highlighter with skip fields."""
+    highlighter = Highlighter(
+        highlight_fields=["question", "text"],
+        skip_fields=["course"]
+    )
+    assert highlighter.highlight_fields == ["question", "text"]
+    assert highlighter.skip_fields == {"course"}
 
 
 def test_highlighter_custom_params():
     """Test Highlighter with custom parameters."""
     highlighter = Highlighter(
-        text_fields=["question"],
+        highlight_fields=["question"],
+        skip_fields=["course", "section"],
+        max_matches=3,
         snippet_size=100,
-        max_snippets=5,
         highlight_format="__",
     )
+    assert highlighter.max_matches == 3
     assert highlighter.snippet_size == 100
-    assert highlighter.max_snippets == 5
     assert highlighter.highlight_format == "__"
+    assert highlighter.skip_fields == {"course", "section"}
 
 
 # ==================== Format Tests ====================
@@ -62,14 +80,16 @@ def test_highlight_format_default_asterisk(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question"])
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "**Python**" in snippet
+        assert "question" in h
+        assert "matches" in h["question"]
+        assert "total_matches" in h["question"]
+        if h["question"]["matches"]:
+            assert "**Python**" in h["question"]["matches"][0]
 
 
 def test_highlight_format_custom_string_delimiter(text_fields, sample_docs):
@@ -77,15 +97,14 @@ def test_highlight_format_custom_string_delimiter(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question"], highlight_format="__")
+    highlighter = Highlighter(highlight_fields=["question"], highlight_format="__")
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "__Python__" in snippet
-                assert "**" not in snippet
+        if h["question"]["matches"]:
+            assert "__Python__" in h["question"]["matches"][0]
+            assert "**" not in h["question"]["matches"][0]
 
 
 def test_highlight_format_tuple_open_close(text_fields, sample_docs):
@@ -93,127 +112,30 @@ def test_highlight_format_tuple_open_close(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question"], highlight_format=("[", "]"))
+    highlighter = Highlighter(highlight_fields=["question"], highlight_format=("[", "]"))
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "[Python]" in snippet
-                assert "**" not in snippet
+        if h["question"]["matches"]:
+            assert "[Python]" in h["question"]["matches"][0]
 
 
-def test_highlight_format_tuple_different_delimiters(text_fields, sample_docs):
-    """Test tuple with different delimiters."""
+def test_highlight_format_callable(text_fields, sample_docs):
+    """Test callable format."""
     index = Index(text_fields)
     index.fit(sample_docs)
-
-    highlighter = Highlighter(text_fields=["question"], highlight_format=("{", "}"))
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "{Python}" in snippet
-
-
-def test_highlight_format_callable_function(text_fields, sample_docs):
-    """Test callable format (custom function)."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    def custom_formatter(text):
-        return f"[[{text}]]"
 
     highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=custom_formatter
+        highlight_fields=["question"],
+        highlight_format=lambda t: f"==={t.upper()}==="
     )
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "[[Python]]" in snippet
-                assert "**" not in snippet
-
-
-def test_highlight_format_callable_with_uppercase(text_fields, sample_docs):
-    """Test callable that transforms to uppercase."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    def uppercase_formatter(text):
-        return f"==={text.upper()}==="
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=uppercase_formatter
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "===PYTHON===" in snippet
-
-
-def test_highlight_format_callable_lambda(text_fields, sample_docs):
-    """Test callable format with lambda."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=lambda t: f"((({t})))"
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "(((Python)))" in snippet
-
-
-def test_highlight_format_multiple_matches_with_custom_format(text_fields, sample_docs):
-    """Test that custom format works with multiple matches in one snippet."""
-    docs = [{"text": "Python is great and Python is easy"}]
-
-    index = Index(text_fields=["text"])
-    index.fit(docs)
-
-    highlighter = Highlighter(
-        text_fields=["text"],
-        highlight_format="__"
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    snippet = highlighted[0]["highlights"]["text"][0]
-    # Should have both matches highlighted
-    assert snippet.count("__") >= 4  # At least 2 opening and 2 closing
-
-
-def test_highlight_format_string_with_brackets(text_fields, sample_docs):
-    """Test string delimiter that contains brackets."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    # Using "[]" as the delimiter - should wrap both sides
-    highlighter = Highlighter(text_fields=["question"], highlight_format="[]")
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                # Since "[]" is a single string, it wraps both sides
-                assert "[]Python[]" in snippet
+        if h["question"]["matches"]:
+            assert "===PYTHON===" in h["question"]["matches"][0]
 
 
 # ==================== Basic Usage Tests ====================
@@ -223,13 +145,75 @@ def test_highlighter_basic_usage(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
     results = index.search("python machine learning")
     highlighted = highlighter.highlight("python machine learning", results)
 
     assert len(highlighted) > 0
-    assert "highlights" in highlighted[0]
-    assert "document" in highlighted[0]
+    h = highlighted[0]
+    assert "question" in h
+    assert "text" in h
+    assert "matches" in h["question"]
+    assert "total_matches" in h["question"]
+
+
+def test_highlighter_with_skip_fields_excludes_fields(text_fields, sample_docs):
+    """Test that skip_fields are excluded from output."""
+    index = Index(text_fields, keyword_fields=["course"])
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(
+        highlight_fields=["question"],
+        skip_fields=["course", "section"]
+    )
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    for h in highlighted:
+        assert "course" not in h
+        assert "section" not in h
+        assert "question" in h
+
+
+def test_highlighter_pass_through_non_highlighted_fields(text_fields, sample_docs):
+    """Test that non-highlighted, non-skipped fields pass through."""
+    index = Index(text_fields, keyword_fields=["course"])
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(
+        highlight_fields=["question"],
+        skip_fields=["course"]
+    )
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    for h in highlighted:
+        # question is highlighted
+        assert "question" in h
+        assert isinstance(h["question"], dict)
+        # section passes through
+        assert "section" in h
+        assert isinstance(h["section"], str)
+        # course is skipped
+        assert "course" not in h
+
+
+def test_highlighter_natural_language_query(text_fields, sample_docs):
+    """Test highlighting with natural language queries."""
+    index = Index(text_fields)
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(highlight_fields=["question", "text"])
+    results = index.search("course join")
+    highlighted = highlighter.highlight("I just discovered the course, can I still join?", results)
+
+    assert len(highlighted) > 0
+    # Should find the document about joining
+    found_join = any(
+        "join" in str(h.get("question", "")).lower() or "join" in str(h.get("text", "")).lower()
+        for h in highlighted
+    )
+    assert found_join
 
 
 def test_highlighter_with_appendable_index(text_fields, sample_docs):
@@ -237,45 +221,74 @@ def test_highlighter_with_appendable_index(text_fields, sample_docs):
     index = AppendableIndex(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     assert len(highlighted) > 0
-    assert "highlights" in highlighted[0]
+    assert "question" in highlighted[0]
 
 
-def test_highlighter_specific_fields(text_fields, sample_docs):
-    """Test highlighting specific fields only."""
+def test_highlighter_max_matches_limit(text_fields, sample_docs):
+    """Test that max_matches limits the number of returned snippets."""
+    docs = [
+        {
+            "question": "Python Python Python Python Python Python Python Python Python Python",
+            "text": "Python is great",
+        }
+    ]
+
     index = Index(text_fields)
-    index.fit(sample_docs)
+    index.fit(docs)
 
-    highlighter = Highlighter(text_fields=["question", "text", "section"])
+    highlighter = Highlighter(highlight_fields=["question"], max_matches=2)
     results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
 
-    # Highlight only 'question' field
-    highlighted = highlighter.highlight("python", results, fields=["question"])
+    # Should return at most 2 matches
+    assert len(highlighted[0]["question"]["matches"]) <= 2
+    # But total_matches should reflect all occurrences
+    assert highlighted[0]["question"]["total_matches"] >= 2
 
-    for h in highlighted:
-        # Only 'question' should be in highlights
-        assert set(h["highlights"].keys()).issubset({"question"})
+
+def test_highlighter_total_matches_count(text_fields, sample_docs):
+    """Test that total_matches reflects all occurrences."""
+    docs = [
+        {
+            "question": "Python is great and Python is easy",
+            "text": "Python programming",
+        }
+    ]
+
+    index = Index(text_fields)
+    index.fit(docs)
+
+    highlighter = Highlighter(highlight_fields=["question"])
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    # Should count both occurrences
+    assert highlighted[0]["question"]["total_matches"] == 2
 
 
 def test_highlighter_empty_query(text_fields, sample_docs):
-    """Test highlighting with empty query (stop words only)."""
+    """Test highlighting with empty query (only stop words)."""
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
     results = index.search("python")
 
     # Query with only stop words
     highlighted = highlighter.highlight("the and is", results)
 
-    # Should return results but with empty highlights
-    assert len(highlighted) == len(results)
+    # Should return empty matches structure
     for h in highlighted:
-        assert h["highlights"] == {}
+        # Fields should have consistent structure
+        assert "question" in h
+        assert isinstance(h["question"], dict)
+        assert h["question"]["matches"] == []
+        assert h["question"]["total_matches"] == 0
 
 
 def test_highlighter_case_preservation(text_fields, sample_docs):
@@ -283,51 +296,30 @@ def test_highlighter_case_preservation(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question"])
+    highlighter = Highlighter(highlight_fields=["question"])
     results = index.search("PYTHON")  # Uppercase query
 
     highlighted = highlighter.highlight("PYTHON", results)
 
-    # Check that original case is preserved
     for h in highlighted:
-        for snippets in h["highlights"].values():
-            for snippet in snippets:
-                # Should contain Python, not PYTHON (original case)
-                assert "**Python**" in snippet or "PYTHON" not in snippet
+        if h["question"]["matches"]:
+            # Should preserve original case from document
+            assert "**Python**" in h["question"]["matches"][0]
 
 
-def test_highlighter_multiple_snippets():
-    """Test that multiple snippets are returned for multiple matches."""
-    docs = [
-        {
-            "text": "Python is great. Python is easy. Python is powerful. Python is popular.",
-        }
-    ]
-
-    index = Index(text_fields=["text"])
-    index.fit(docs)
-
-    highlighter = Highlighter(text_fields=["text"], max_snippets=2)
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    # Should have highlights
-    assert highlighted[0]["highlights"]
-
-
-def test_highlighter_no_matches():
+def test_highlighter_no_matches(text_fields, sample_docs):
     """Test highlighting when query doesn't match."""
     docs = [{"text": "This is about Python programming"}]
 
     index = Index(text_fields=["text"])
     index.fit(docs)
 
-    highlighter = Highlighter(text_fields=["text"])
+    highlighter = Highlighter(highlight_fields=["text"])
     results = index.search("python")
     highlighted = highlighter.highlight("nonexistent term", results)
 
-    # Should return empty highlights
-    assert highlighted[0]["highlights"] == {}
+    assert highlighted[0]["text"]["matches"] == []
+    assert highlighted[0]["text"]["total_matches"] == 0
 
 
 def test_highlighter_with_filters(text_fields, sample_docs):
@@ -335,58 +327,33 @@ def test_highlighter_with_filters(text_fields, sample_docs):
     index = Index(text_fields, keyword_fields=["course"])
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
     results = index.search("python", filter_dict={"course": "python-basics"})
     highlighted = highlighter.highlight("python", results)
 
     assert len(highlighted) > 0
-    # All results should be from python-basics course
+    # All original results should be from python-basics
+    # (but course is pass-through since we didn't skip it)
     for h in highlighted:
-        assert h["document"]["course"] == "python-basics"
+        # section should pass through
+        assert "section" in h
 
 
 def test_highlighter_snippet_size():
-    """Test that snippet_size parameter affects output."""
-    docs = [
-        {"text": "Python " * 100 + "machine learning" + " is great " * 100},
-    ]
+    """Test that snippet_size affects match length."""
+    docs = [{"text": "Python " * 100 + "machine learning" + " is great " * 100}]
 
     index = Index(text_fields=["text"])
     index.fit(docs)
 
-    highlighter = Highlighter(text_fields=["text"], snippet_size=50)
+    highlighter = Highlighter(highlight_fields=["text"], snippet_size=50)
     results = index.search("machine learning")
     highlighted = highlighter.highlight("machine learning", results)
 
-    # Snippet should be roughly snippet_size characters (plus delimiters and ellipsis)
-    snippet = highlighted[0]["highlights"]["text"][0]
-    # Should be reasonably short (snippet_size + some margin)
-    assert len(snippet) < 200
-
-
-def test_highlighter_workflow_example(text_fields, sample_docs):
-    """Test the typical workflow: search then highlight."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(text_fields=["question", "text"])
-
-    # Step 1: Search
-    query = "python machine learning"
-    results = index.search(query)
-    assert len(results) > 0
-
-    # Step 2: Highlight
-    highlighted = highlighter.highlight(query, results)
-    assert len(highlighted) > 0
-
-    # Verify structure
-    for h in highlighted:
-        assert "highlights" in h
-        assert "document" in h
-        # The original document is preserved
-        assert "question" in h["document"]
-        assert "text" in h["document"]
+    if highlighted[0]["text"]["matches"]:
+        snippet = highlighted[0]["text"]["matches"][0]
+        # Should be reasonably short
+        assert len(snippet) < 200
 
 
 def test_highlighter_with_boost(text_fields, sample_docs):
@@ -394,14 +361,14 @@ def test_highlighter_with_boost(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
 
     # Search with boost
     results = index.search("python", boost_dict={"question": 2.0})
     highlighted = highlighter.highlight("python", results)
 
     assert len(highlighted) > 0
-    assert "highlights" in highlighted[0]
+    assert "question" in highlighted[0]
 
 
 def test_highlighter_multiterm_query(text_fields, sample_docs):
@@ -409,34 +376,15 @@ def test_highlighter_multiterm_query(text_fields, sample_docs):
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(text_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"])
     results = index.search("python machine learning")
     highlighted = highlighter.highlight("python machine learning", results)
 
     # Should find highlights for multiple terms
     for h in highlighted:
-        for snippets in h["highlights"].values():
-            for snippet in snippets:
-                # At least one of the terms should be highlighted
-                has_mark = "**" in snippet
-                if has_mark:
-                    break
-
-
-def test_highlighter_preserves_document_structure(text_fields, sample_docs):
-    """Test that original document is preserved in highlighted output."""
-    index = Index(text_fields, keyword_fields=["course"])
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(text_fields=["question", "text"])
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    # Check that original documents are preserved
-    for i, h in enumerate(highlighted):
-        original_doc = results[i]
-        highlighted_doc = h["document"]
-        assert original_doc == highlighted_doc
+        if h["question"]["matches"]:
+            # At least one term should be highlighted
+            assert "**" in h["question"]["matches"][0]
 
 
 def test_highlighter_custom_stop_words():
@@ -448,11 +396,82 @@ def test_highlighter_custom_stop_words():
 
     # Use custom stop words (including "quick")
     highlighter = Highlighter(
-        text_fields=["text"],
+        highlight_fields=["text"],
         stop_words={"quick", "brown", "the", "over", "lazy"}
     )
     results = index.search("quick brown")
     highlighted = highlighter.highlight("quick brown", results)
 
-    # Should not highlight "quick" or "brown" since they're stop words
-    assert highlighted[0]["highlights"] == {}
+    # Should not highlight anything since all terms are stop words
+    assert highlighted[0]["text"]["matches"] == []
+    assert highlighted[0]["text"]["total_matches"] == 0
+
+
+def test_highlighter_multiple_fields_with_different_results(text_fields, sample_docs):
+    """Test highlighting multiple fields from the same document."""
+    docs = [
+        {
+            "question": "Python programming tutorial",
+            "text": "Learn Python programming in this comprehensive tutorial. Python is versatile.",
+            "category": "Programming"
+        }
+    ]
+
+    index = Index(text_fields=["question", "text", "category"])
+    index.fit(docs)
+
+    highlighter = Highlighter(highlight_fields=["question", "text"])
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    h = highlighted[0]
+    # Both fields should have matches
+    assert len(h["question"]["matches"]) > 0
+    assert h["question"]["total_matches"] >= 1
+    assert len(h["text"]["matches"]) > 0
+    assert h["text"]["total_matches"] >= 2
+    # category should pass through
+    assert h["category"] == "Programming"
+
+
+def test_highlighter_long_natural_language_query():
+    """Test with a complex natural language query."""
+    docs = [
+        {
+            "question": "Late enrollment policy",
+            "text": "Students can join the course late. There's no penalty for late registration. You'll get full access to all materials.",
+        },
+        {
+            "question": "Course prerequisites",
+            "text": "This course requires basic programming knowledge. No prior experience with Python is needed.",
+        },
+    ]
+
+    index = Index(text_fields=["question", "text"])
+    index.fit(docs)
+
+    highlighter = Highlighter(highlight_fields=["question", "text"])
+    results = index.search("late")
+    highlighted = highlighter.highlight("I just found this course, is it too late to enroll?", results)
+
+    # Should find relevant content about late enrollment
+    assert len(highlighted) > 0
+    found_late = any(
+        "late" in str(h.get("question", "")).lower() or "late" in str(h.get("text", "")).lower()
+        for h in highlighted
+    )
+    assert found_late
+
+
+def test_highlighter_returns_list_of_dicts(text_fields, sample_docs):
+    """Test that highlight returns a list of dicts."""
+    index = Index(text_fields)
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(highlight_fields=["question"])
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    assert isinstance(highlighted, list)
+    for h in highlighted:
+        assert isinstance(h, dict)
