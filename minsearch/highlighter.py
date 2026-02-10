@@ -4,10 +4,9 @@ from collections import Counter
 
 
 HighlightFormat = Union[
-    str,  # Tag name: "mark" -> <mark>text</mark>
-    Tuple[str, str],  # Open/close tags: ("**", "**") -> **text**
-    Tuple[str, str, str],  # Tag with attrs: ("mark", "class='hl'", "") -> <mark class='hl'>text</mark>
-    Callable[[str], str],  # Custom function: lambda t: f"[{t}]" -> [text]
+    str,  # Delimiter: "**" -> **text**
+    Tuple[str, str],  # Open/close: ("[", "]") -> [text]
+    Callable[[str], str],  # Custom function: lambda t: f"__{t}__" -> __text__
 ]
 
 
@@ -24,10 +23,9 @@ class Highlighter:
         snippet_size: Maximum number of characters per snippet.
         max_snippets: Maximum number of snippets per document.
         highlight_format: Format for highlights. Can be:
-            - str: Tag name ("mark" -> <mark>text</mark>)
-            - tuple: (open_tag, close_tag) -> ("**", "**") -> **text**
-            - tuple: (tag, attributes) -> ("mark", "class='hl'") -> <mark class='hl'>text</mark>
-            - callable: lambda text: f"[{text}]" -> [text]
+            - str: Delimiter to wrap both sides ("**" -> **text**)
+            - tuple: (open, close) delimiters (("[", "]") -> [text])
+            - callable: lambda text: f"__{text}__" -> __text__
         stop_words: Set of stop words to ignore.
 
     Example:
@@ -38,11 +36,11 @@ class Highlighter:
         >>> results = index.search('search query')
         >>> highlighted = highlighter.highlight('search query', results)
         >>> print(highlighted[0]['highlights']['text'])
-        ['...this is a <mark>search</mark> <mark>query</mark> example...']
+        ['...this is a **search** **query** example...']
 
         Custom format:
-        >>> highlighter = Highlighter(text_fields=['text'], highlight_format=('**', '**'))
-        >>> # Returns: '...this is a **search** **query** example...'
+        >>> highlighter = Highlighter(text_fields=['text'], highlight_format='__')
+        >>> # Returns: '...this is a __search__ __query__ example...'
     """
 
     DEFAULT_STOP_WORDS: Set[str] = {
@@ -74,7 +72,7 @@ class Highlighter:
         text_fields: List[str],
         snippet_size: int = 200,
         max_snippets: int = 3,
-        highlight_format: HighlightFormat = "mark",
+        highlight_format: HighlightFormat = "**",
         stop_words: Optional[Set[str]] = None,
     ):
         """
@@ -109,35 +107,16 @@ class Highlighter:
             return fmt(text)
 
         if isinstance(fmt, str):
-            # Simple tag name
-            return f"<{fmt}>{text}</{fmt}>"
+            # Single delimiter wraps both sides
+            return f"{fmt}{text}{fmt}"
 
-        if isinstance(fmt, tuple):
-            if len(fmt) == 2:
-                open_tag, close_or_attrs = fmt
-                # Detect if this is (open, close) or (tag, attrs) format:
-                # - If open_tag contains '<', it's definitely (open, close)
-                # - If open_tag is a valid HTML tag name (only letters), it's (tag, attrs)
-                # - Otherwise, it's (open, close) with custom delimiters
-                if '<' in open_tag or not open_tag.isalpha():
-                    # (open, close) format
-                    return f"{open_tag}{text}{close_or_attrs}"
-                else:
-                    # (tag, attrs) format
-                    if close_or_attrs:
-                        return f"<{open_tag} {close_or_attrs}>{text}</{open_tag}>"
-                    else:
-                        return f"<{open_tag}>{text}</{open_tag}>"
-            elif len(fmt) == 3:
-                # (tag, attrs, placeholder) - third element ignored for compatibility
-                tag, attrs, _ = fmt
-                if attrs:
-                    return f"<{tag} {attrs}>{text}</{tag}>"
-                else:
-                    return f"<{tag}>{text}</{tag}>"
+        if isinstance(fmt, tuple) and len(fmt) == 2:
+            # Tuple with open and close delimiters
+            open_delim, close_delim = fmt
+            return f"{open_delim}{text}{close_delim}"
 
         # Fallback to default
-        return f"<mark>{text}</mark>"
+        return f"**{text}**"
 
     def _tokenize(self, text: str) -> List[str]:
         """

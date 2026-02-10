@@ -39,7 +39,7 @@ def test_highlighter_initialization():
     assert highlighter.text_fields == ["question", "text"]
     assert highlighter.snippet_size == 200
     assert highlighter.max_snippets == 3
-    assert highlighter.highlight_format == "mark"
+    assert highlighter.highlight_format == "**"
 
 
 def test_highlighter_custom_params():
@@ -48,17 +48,17 @@ def test_highlighter_custom_params():
         text_fields=["question"],
         snippet_size=100,
         max_snippets=5,
-        highlight_format="em",
+        highlight_format="__",
     )
     assert highlighter.snippet_size == 100
     assert highlighter.max_snippets == 5
-    assert highlighter.highlight_format == "em"
+    assert highlighter.highlight_format == "__"
 
 
 # ==================== Format Tests ====================
 
-def test_highlight_format_default_mark_tag(text_fields, sample_docs):
-    """Test default format with <mark> tag."""
+def test_highlight_format_default_asterisk(text_fields, sample_docs):
+    """Test default format with ** delimiter."""
     index = Index(text_fields)
     index.fit(sample_docs)
 
@@ -69,96 +69,31 @@ def test_highlight_format_default_mark_tag(text_fields, sample_docs):
     for h in highlighted:
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
-                assert "<mark>" in snippet
-                assert "</mark>" in snippet
-
-
-def test_highlight_format_custom_tag_name(text_fields, sample_docs):
-    """Test custom tag name (string format)."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(text_fields=["question"], highlight_format="strong")
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "<strong>" in snippet
-                assert "</strong>" in snippet
-                assert "<mark>" not in snippet
-
-
-def test_highlight_format_tag_with_attributes(text_fields, sample_docs):
-    """Test tag with attributes as tuple (tag, attrs)."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("mark", "class='highlight'")
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "class='highlight'" in snippet
-                assert "<mark class='highlight'>Python</mark>" in snippet
-
-
-def test_highlight_format_tag_with_multiple_attributes(text_fields, sample_docs):
-    """Test tag with multiple attributes."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("span", "class='hl' data-match='true'")
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "class='hl'" in snippet
-                assert "data-match='true'" in snippet
-                assert "<span" in snippet
-                assert "</span>" in snippet
-
-
-def test_highlight_format_custom_open_close_tags(text_fields, sample_docs):
-    """Test custom open/close tags (markdown-style)."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("**", "**")
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
                 assert "**Python**" in snippet
-                assert "<mark>" not in snippet
-                assert "</mark>" not in snippet
 
 
-def test_highlight_format_different_open_close_tags(text_fields, sample_docs):
-    """Test different open and close tags."""
+def test_highlight_format_custom_string_delimiter(text_fields, sample_docs):
+    """Test custom string delimiter."""
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("[", "]")
-    )
+    highlighter = Highlighter(text_fields=["question"], highlight_format="__")
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    for h in highlighted:
+        for field, snippets in h["highlights"].items():
+            for snippet in snippets:
+                assert "__Python__" in snippet
+                assert "**" not in snippet
+
+
+def test_highlight_format_tuple_open_close(text_fields, sample_docs):
+    """Test tuple format with different open/close delimiters."""
+    index = Index(text_fields)
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(text_fields=["question"], highlight_format=("[", "]"))
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
@@ -166,6 +101,22 @@ def test_highlight_format_different_open_close_tags(text_fields, sample_docs):
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
                 assert "[Python]" in snippet
+                assert "**" not in snippet
+
+
+def test_highlight_format_tuple_different_delimiters(text_fields, sample_docs):
+    """Test tuple with different delimiters."""
+    index = Index(text_fields)
+    index.fit(sample_docs)
+
+    highlighter = Highlighter(text_fields=["question"], highlight_format=("{", "}"))
+    results = index.search("python")
+    highlighted = highlighter.highlight("python", results)
+
+    for h in highlighted:
+        for field, snippets in h["highlights"].items():
+            for snippet in snippets:
+                assert "{Python}" in snippet
 
 
 def test_highlight_format_callable_function(text_fields, sample_docs):
@@ -187,7 +138,7 @@ def test_highlight_format_callable_function(text_fields, sample_docs):
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
                 assert "[[Python]]" in snippet
-                assert "<mark>" not in snippet
+                assert "**" not in snippet
 
 
 def test_highlight_format_callable_with_uppercase(text_fields, sample_docs):
@@ -196,7 +147,7 @@ def test_highlight_format_callable_with_uppercase(text_fields, sample_docs):
     index.fit(sample_docs)
 
     def uppercase_formatter(text):
-        return f"__{text.upper()}__"
+        return f"==={text.upper()}==="
 
     highlighter = Highlighter(
         text_fields=["question"],
@@ -208,7 +159,7 @@ def test_highlight_format_callable_with_uppercase(text_fields, sample_docs):
     for h in highlighted:
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
-                assert "__PYTHON__" in snippet
+                assert "===PYTHON===" in snippet
 
 
 def test_highlight_format_callable_lambda(text_fields, sample_docs):
@@ -218,7 +169,7 @@ def test_highlight_format_callable_lambda(text_fields, sample_docs):
 
     highlighter = Highlighter(
         text_fields=["question"],
-        highlight_format=lambda t: f"{{{t}}}"
+        highlight_format=lambda t: f"((({t})))"
     )
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
@@ -226,45 +177,7 @@ def test_highlight_format_callable_lambda(text_fields, sample_docs):
     for h in highlighted:
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
-                assert "{Python}" in snippet
-
-
-def test_highlight_format_html_tags_with_angle_brackets(text_fields, sample_docs):
-    """Test format with HTML tags containing angle brackets."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=('<mark class="yellow">', '</mark>')
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert '<mark class="yellow">' in snippet
-                assert '</mark>' in snippet
-
-
-def test_highlight_format_three_tuple_with_empty_attrs(text_fields, sample_docs):
-    """Test three-tuple format with empty attributes."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("span", "", "")
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "<span>" in snippet
-                assert "</span>" in snippet
+                assert "(((Python)))" in snippet
 
 
 def test_highlight_format_multiple_matches_with_custom_format(text_fields, sample_docs):
@@ -276,51 +189,31 @@ def test_highlight_format_multiple_matches_with_custom_format(text_fields, sampl
 
     highlighter = Highlighter(
         text_fields=["text"],
-        highlight_format=("**", "**")
+        highlight_format="__"
     )
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     snippet = highlighted[0]["highlights"]["text"][0]
     # Should have both matches highlighted
-    assert snippet.count("**") >= 4  # At least 2 opening and 2 closing
+    assert snippet.count("__") >= 4  # At least 2 opening and 2 closing
 
 
-def test_highlight_format_underscore_style(text_fields, sample_docs):
-    """Test underscore format (alternative markdown)."""
+def test_highlight_format_string_with_brackets(text_fields, sample_docs):
+    """Test string delimiter that contains brackets."""
     index = Index(text_fields)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("_", "_")
-    )
+    # Using "[]" as the delimiter - should wrap both sides
+    highlighter = Highlighter(text_fields=["question"], highlight_format="[]")
     results = index.search("python")
     highlighted = highlighter.highlight("python", results)
 
     for h in highlighted:
         for field, snippets in h["highlights"].items():
             for snippet in snippets:
-                assert "_Python_" in snippet
-
-
-def test_highlight_format_color_span(text_fields, sample_docs):
-    """Test colored span format."""
-    index = Index(text_fields)
-    index.fit(sample_docs)
-
-    highlighter = Highlighter(
-        text_fields=["question"],
-        highlight_format=("span", "style='color: red; background: yellow'")
-    )
-    results = index.search("python")
-    highlighted = highlighter.highlight("python", results)
-
-    for h in highlighted:
-        for field, snippets in h["highlights"].items():
-            for snippet in snippets:
-                assert "style='color: red; background: yellow'" in snippet
-                assert "<span" in snippet
+                # Since "[]" is a single string, it wraps both sides
+                assert "[]Python[]" in snippet
 
 
 # ==================== Basic Usage Tests ====================
@@ -400,7 +293,7 @@ def test_highlighter_case_preservation(text_fields, sample_docs):
         for snippets in h["highlights"].values():
             for snippet in snippets:
                 # Should contain Python, not PYTHON (original case)
-                assert "Python" in snippet or "PYTHON" not in snippet
+                assert "**Python**" in snippet or "PYTHON" not in snippet
 
 
 def test_highlighter_multiple_snippets():
@@ -465,9 +358,9 @@ def test_highlighter_snippet_size():
     results = index.search("machine learning")
     highlighted = highlighter.highlight("machine learning", results)
 
-    # Snippet should be roughly snippet_size characters (plus tags and ellipsis)
+    # Snippet should be roughly snippet_size characters (plus delimiters and ellipsis)
     snippet = highlighted[0]["highlights"]["text"][0]
-    # Should be reasonably short (snippet_size + some margin for tags)
+    # Should be reasonably short (snippet_size + some margin)
     assert len(snippet) < 200
 
 
@@ -525,7 +418,7 @@ def test_highlighter_multiterm_query(text_fields, sample_docs):
         for snippets in h["highlights"].values():
             for snippet in snippets:
                 # At least one of the terms should be highlighted
-                has_mark = "<mark>" in snippet
+                has_mark = "**" in snippet
                 if has_mark:
                     break
 
