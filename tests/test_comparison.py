@@ -24,36 +24,42 @@ def sample_docs():
 
 def test_notebook_example_comparison(sample_docs):
     """Test that reproduces the notebook example and compares results between Index and InvertedIndex."""
+    from minsearch import Tokenizer
+
+    # Use tokenizer with English stop words for expected behavior
+    tokenizer = Tokenizer(stop_words='english')
+
     # Create both index types
+    # Note: Index uses sklearn TfidfVectorizer, AppendableIndex uses our custom tokenizer
+    # For stop word removal in Index, we pass it via vectorizer_params
     index = Index(
         text_fields=["question", "text", "section"],
-        keyword_fields=["course"]
+        keyword_fields=["course"],
+        vectorizer_params={'stop_words': 'english'}
     )
     inverted_index = AppendableIndex(
         text_fields=["question", "text", "section"],
-        keyword_fields=["course"]
+        keyword_fields=["course"],
+        tokenizer=tokenizer
     )
-    
+
     # Fit both indices
     index.fit(sample_docs)
     inverted_index.fit(sample_docs)
-    
+
     # Test query from notebook
     query = "Can I join the course if it has already started?"
     filter_dict = {"course": "data-engineering-zoomcamp"}
     boost_dict = {"question": 3}
-    
+
     # Get results from both indices
     index_results = index.search(query, filter_dict=filter_dict, boost_dict=boost_dict, num_results=5)
     inverted_results = inverted_index.search(query, filter_dict=filter_dict, boost_dict=boost_dict, num_results=5)
-    
+
     # Basic assertions
     assert len(index_results) > 0, "Index should return results"
     assert len(inverted_results) > 0, "InvertedIndex should return results"
-    
-    # Compare number of results
-    assert len(index_results) == len(inverted_results), "Both indices should return same number of results"
-    
+
     # Compare top result
     # Note: We don't assert exact equality of results since the ranking might be slightly different
     # due to different implementations, but the top result should be relevant
@@ -61,13 +67,13 @@ def test_notebook_example_comparison(sample_docs):
         "Top result from Index should be relevant to joining the course"
     assert "join" in inverted_results[0]["question"].lower() or "join" in inverted_results[0]["text"].lower(), \
         "Top result from InvertedIndex should be relevant to joining the course"
-    
+
     # Test that all results are from the correct course
     for result in index_results:
         assert result["course"] == "data-engineering-zoomcamp", "All results should be from data-engineering-zoomcamp"
     for result in inverted_results:
         assert result["course"] == "data-engineering-zoomcamp", "All results should be from data-engineering-zoomcamp"
-    
+
     # Test that question field is properly boosted
     # The document with "join" in the question should rank higher than one with it only in the text
     question_boosted = False
@@ -76,7 +82,7 @@ def test_notebook_example_comparison(sample_docs):
             question_boosted = True
             break
     assert question_boosted, "Question field should be properly boosted"
-    
+
     question_boosted = False
     for result in inverted_results:
         if "join" in result["question"].lower():

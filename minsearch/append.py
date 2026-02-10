@@ -1,76 +1,13 @@
 import re
 import math
 from collections import defaultdict, Counter
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Union, Callable
 from datetime import date, datetime
 import numpy as np
 import pandas as pd
 
 from .filters import Filter, FieldData
-
-
-class Tokenizer:
-    """
-    A custom tokenizer that splits text into tokens and removes stop words.
-    Mimics sklearn's default tokenizer behavior.
-    """
-
-    # Common English stop words (similar to sklearn's default)
-    DEFAULT_STOP_WORDS = {
-        "a", "about", "above", "after", "again", "against", "all", "am", "an",
-        "and", "any", "are", "aren't", "as", "at", "be", "because", "been",
-        "before", "being", "below", "between", "both", "but", "by", "can't",
-        "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
-        "doing", "don't", "down", "during", "each", "few", "for", "from",
-        "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having",
-        "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
-        "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
-        "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
-        "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor",
-        "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our",
-        "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
-        "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
-        "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
-        "then", "there", "there's", "these", "they", "they'd", "they'll", "they're",
-        "they've", "this", "those", "through", "to", "too", "under", "until", "up",
-        "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
-        "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
-        "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would",
-        "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours",
-        "yourself", "yourselves",
-    }
-
-    def __init__(self, pattern: str = r"[\s\W\d]+", stop_words: Optional[Set[str]] = None):
-        """
-        Initialize the tokenizer with a regex pattern and stop words.
-
-        Args:
-            pattern: Regex pattern to split text on.
-            stop_words: Set of stop words to remove. If None, uses defaults.
-        """
-        self.pattern = re.compile(pattern)
-        self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
-
-    def tokenize(self, text: str) -> List[str]:
-        """
-        Tokenize the input text and remove stop words.
-
-        Args:
-            text: Text to tokenize
-
-        Returns:
-            List of tokens with stop words removed
-        """
-        if not text:
-            return []
-
-        text = text.lower()
-        tokens = [token for token in self.pattern.split(text) if token]
-
-        if self.stop_words:
-            tokens = [token for token in tokens if token not in self.stop_words]
-
-        return tokens
+from .tokenizer import Tokenizer
 
 
 class AppendableIndex:
@@ -102,7 +39,7 @@ class AppendableIndex:
         keyword_fields: Optional[List[str]] = None,
         numeric_fields: Optional[List[str]] = None,
         date_fields: Optional[List[str]] = None,
-        stop_words: Optional[Set[str]] = None,
+        tokenizer: Optional[Tokenizer] = None,
     ):
         """
         Initialize the AppendableIndex.
@@ -112,7 +49,7 @@ class AppendableIndex:
             keyword_fields: List of keyword field names to index.
             numeric_fields: List of numeric field names to index.
             date_fields: List of date field names to index.
-            stop_words: Set of stop words to remove.
+            tokenizer: Tokenizer to use. If None, creates a default one.
         """
         self.text_fields = text_fields
         self.keyword_fields = keyword_fields if keyword_fields is not None else []
@@ -169,7 +106,10 @@ class AppendableIndex:
         }
 
         # Initialize tokenizer
-        self.tokenizer = Tokenizer(stop_words=stop_words)
+        if tokenizer is not None:
+            self.tokenizer = tokenizer
+        else:
+            self.tokenizer = Tokenizer()  # No stop words by default
 
         # Initialize the filter with empty data (will be updated on fit/append)
         self._filter = Filter(

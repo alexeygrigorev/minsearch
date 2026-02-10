@@ -273,10 +273,13 @@ def test_highlighter_total_matches_count(text_fields, sample_docs):
 
 def test_highlighter_empty_query(text_fields, sample_docs):
     """Test highlighting with empty query (only stop words)."""
-    index = Index(text_fields)
+    from minsearch import Tokenizer, AppendableIndex
+
+    tokenizer = Tokenizer(stop_words='english')
+    index = AppendableIndex(text_fields=text_fields, tokenizer=tokenizer)
     index.fit(sample_docs)
 
-    highlighter = Highlighter(highlight_fields=["question", "text"])
+    highlighter = Highlighter(highlight_fields=["question", "text"], tokenizer=tokenizer)
     results = index.search("python")
 
     # Query with only stop words
@@ -388,16 +391,19 @@ def test_highlighter_multiterm_query(text_fields, sample_docs):
 
 
 def test_highlighter_custom_stop_words():
-    """Test Highlighter with custom stop words."""
+    """Test Highlighter with custom stop words via tokenizer."""
+    from minsearch.tokenizer import Tokenizer
+
     docs = [{"text": "The quick brown fox jumps over the lazy dog"}]
 
     index = Index(text_fields=["text"])
     index.fit(docs)
 
     # Use custom stop words (including "quick")
+    tokenizer = Tokenizer(stop_words={"quick", "brown", "the", "over", "lazy"})
     highlighter = Highlighter(
         highlight_fields=["text"],
-        stop_words={"quick", "brown", "the", "over", "lazy"}
+        tokenizer=tokenizer
     )
     results = index.search("quick brown")
     highlighted = highlighter.highlight("quick brown", results)
@@ -475,3 +481,72 @@ def test_highlighter_returns_list_of_dicts(text_fields, sample_docs):
     assert isinstance(highlighted, list)
     for h in highlighted:
         assert isinstance(h, dict)
+
+
+def test_highlighter_natural_language_query_long():
+    """Test highlighting with a long natural language query."""
+    from minsearch import Tokenizer, AppendableIndex
+
+    tokenizer = Tokenizer(stop_words='english')
+    docs = [
+        {
+            "question": "I just discovered the course, can I still join?",
+            "text": "Yes, you can still join the course even after discovering it late. You will have access to all course materials from the start.",
+            "section": "Enrollment",
+        },
+        {
+            "question": "Late enrollment policy for courses",
+            "text": "Students can enroll late. There is no penalty for late registration. Full access to materials is guaranteed.",
+            "section": "Enrollment",
+        },
+        {
+            "question": "Course prerequisites and requirements",
+            "text": "This course requires basic Python knowledge. No prior experience with data science is needed.",
+            "section": "Requirements",
+        },
+    ]
+
+    index = AppendableIndex(text_fields=["question", "text", "section"], tokenizer=tokenizer)
+    index.fit(docs)
+
+    highlighter = Highlighter(highlight_fields=["question", "text"], tokenizer=tokenizer)
+
+    # Natural language query
+    query = "I just discovered the course, can I still join?"
+    results = index.search(query)
+    highlighted = highlighter.highlight(query, results)
+
+    # Verify query extraction
+    extracted_terms = highlighter._extract_query_terms(query)
+    # Stop words removed: "I", "the"
+    assert "just" in extracted_terms
+    assert "discovered" in extracted_terms
+    assert "course" in extracted_terms
+    assert "can" in extracted_terms
+    assert "still" in extracted_terms
+    assert "join" in extracted_terms
+    # Stop words NOT in extracted terms
+    assert "i" not in extracted_terms
+    assert "the" not in extracted_terms
+
+    # First result should be the exact match
+    first_result = highlighted[0]
+    assert "question" in first_result
+    assert "text" in first_result
+    assert "section" in first_result
+    assert first_result["section"] == "Enrollment"
+
+    # Check question field has matches
+    assert first_result["question"]["total_matches"] == 6
+    assert len(first_result["question"]["matches"]) > 0
+    # All terms should be highlighted
+    assert "**just**" in first_result["question"]["matches"][0]
+    assert "**discovered**" in first_result["question"]["matches"][0]
+    assert "**course**" in first_result["question"]["matches"][0]
+    assert "**can**" in first_result["question"]["matches"][0]
+    assert "**still**" in first_result["question"]["matches"][0]
+    assert "**join**" in first_result["question"]["matches"][0]
+
+    # Check text field has matches
+    assert first_result["text"]["total_matches"] >= 4
+    assert len(first_result["text"]["matches"]) > 0

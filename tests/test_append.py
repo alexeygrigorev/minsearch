@@ -1,5 +1,5 @@
 import pytest
-from datetime import date, datetime
+from datetime import date
 from minsearch.minsearch import Index
 from minsearch.append import AppendableIndex
 
@@ -273,10 +273,11 @@ def test_stop_words():
     assert len(results) > 0
 
     # Test with custom stop words
+    from minsearch import Tokenizer
     index = AppendableIndex(
         text_fields=["title", "description"],
         keyword_fields=[],
-        stop_words={"the", "a", "an"},
+        tokenizer=Tokenizer(stop_words={"the", "a", "an"}),
     )
     index.fit(docs)
 
@@ -411,6 +412,7 @@ def test_readme_example():
 
 def test_tokenizer():
     # Test the custom tokenizer
+    from minsearch import Tokenizer
     docs = [
         {
             "title": "The Python Programming",
@@ -419,7 +421,7 @@ def test_tokenizer():
         {"title": "Data Science", "description": "Python for data science"},
     ]
 
-    # Test with default tokenizer
+    # Test with default tokenizer (no stop words by default)
     index = AppendableIndex(text_fields=["title", "description"], keyword_fields=[])
     index.fit(docs)
 
@@ -430,7 +432,7 @@ def test_tokenizer():
     index = AppendableIndex(
         text_fields=["title", "description"],
         keyword_fields=[],
-        stop_words={"the", "a", "an"},
+        tokenizer=Tokenizer(stop_words={"the", "a", "an"}),
     )
     index.fit(docs)
 

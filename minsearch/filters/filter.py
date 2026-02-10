@@ -3,7 +3,6 @@ Filter class for applying validated query objects.
 """
 import numpy as np
 import pandas as pd
-from datetime import date, datetime
 
 from .query import (
     KeywordQuery,
@@ -12,11 +11,9 @@ from .query import (
     DateExactQuery,
     DateRangeQuery,
     ValidatedFilter,
-    Condition,
-    Operator,
 )
 from .masker import Masker, PandasMasker, DictMasker
-from .validator import Validator, FilterValidationError
+from .validator import Validator
 from .field import FieldData
 
 

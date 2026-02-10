@@ -10,18 +10,26 @@ A minimalistic search engine that provides both text-based and vector-based sear
 
 - Text field indexing with TF-IDF and cosine similarity
 - Vector search with cosine similarity for pre-computed embeddings
-- Keyword field filtering with exact matching
 - Field boosting for fine-tuning search relevance (text-based search)
-- Stop word removal and custom tokenization
+- Extensive filtering capabilities (exact match and ranges)
 - Support for incremental document addition (AppendableIndex and VectorSearch)
 - Customizable tokenizer patterns and stop words
-- Efficient search with filtering and boosting
+- Result highlighting with configurable formatting
 
 ## Installation 
+
+We recommend to use `uv`: 
+
+```bash
+uv add minsearch
+```
+
+Or, install with `pip`:
 
 ```bash
 pip install minsearch
 ```
+
 
 **Note:** minsearch requires Python 3.10 or later.
 
@@ -91,12 +99,8 @@ index.append(doc1)
 doc2 = {"title": "Data Science", "description": "Python for data science", "course": "CS102"}
 index.append(doc2)
 
-# Search with custom stop words
-index = AppendableIndex(
-    text_fields=["title", "description"],
-    keyword_fields=["course"],
-    stop_words={"the", "a", "an"}  # Custom stop words
-)
+# Search
+results = index.search("python programming")
 ```
 
 ### Vector Search with VectorSearch
@@ -125,9 +129,9 @@ filter_dict = {"category": "programming", "level": "beginner"}
 results = index.search(query_vector, filter_dict=filter_dict, num_results=5)
 ```
 
-#### Incremental Vector Search
+### Incremental Vector Search
 
-VectorSearch now supports appending vectors incrementally:
+`VectorSearch` also supports appending vectors incrementally:
 
 ```python
 from minsearch import VectorSearch
@@ -154,42 +158,292 @@ query_vector = np.random.rand(768)
 results = index.search(query_vector, num_results=5)
 ```
 
-### Advanced Features
 
-#### Custom Tokenizer Pattern
+### Custom Tokenizer
 
 ```python
 from minsearch import AppendableIndex
+from minsearch.tokenizer import Tokenizer
 
-# Create index with custom tokenizer pattern
+tokenizer = Tokenizer(
+    stop_words='english',  # Use default English stop words
+    stemmer='porter'       # Apply Porter stemming
+)
+
 index = AppendableIndex(
     text_fields=["title", "description"],
     keyword_fields=["course"],
-    tokenizer_pattern=r'[\s\W\d]+'  # Custom pattern to split on whitespace, non-word chars, and digits
+    tokenizer=tokenizer
 )
 ```
 
-#### Field Boosting (Text-based Search)
+### Field Boosting (Text-based Search)
 
 ```python
 # Boost certain fields to increase their importance in search
 boost_dict = {
-    "title": 2.0,      # Title matches are twice as important
+    "title": 2.0,       # Title matches are twice as important
     "description": 1.0  # Normal importance for description
 }
 results = index.search("python", boost_dict=boost_dict)
 ```
 
+### Filtering
+
+All filter types (keyword, numeric range, date/time range) work with all search index types: `Index`, `AppendableIndex`, and `VectorSearch`.
+
 #### Keyword Filtering
 
+Filter results by exact keyword matches:
+
 ```python
-# Filter results by exact keyword matches
 filter_dict = {
     "course": "CS101",
     "level": "beginner"
 }
 results = index.search("python", filter_dict=filter_dict)
 ```
+
+#### Numeric Range Filtering
+
+Filter results by numeric values using comparison operators:
+
+```python
+from minsearch import AppendableIndex
+
+docs = [
+    {"title": "Python Basics", "price": 29.99, "rating": 4.5},
+    {"title": "Advanced Python", "price": 49.99, "rating": 4.8},
+    {"title": "Python Masterclass", "price": 99.99, "rating": 4.9},
+]
+
+index = AppendableIndex(
+    text_fields=["title"],
+    keyword_fields=[],
+    numeric_fields=["price", "rating"]
+)
+index.fit(docs)
+
+# Price greater than or equal to 40
+results = index.search("python", filter_dict={"price": [(">=", 40)]})
+
+# Rating between 4.5 and 4.9
+results = index.search("python", filter_dict={"rating": [(">=", 4.5), ("<=", 4.9)]})
+
+# Multiple numeric filters
+results = index.search(
+    "python",
+    filter_dict={
+        "price": [("<", 100)],
+        "rating": [(">=", 4.7)]
+    }
+)
+```
+
+Supported operators: `==` (equals), `!=` (not equals), `>` (greater than), `>=` (greater than or equal), `<` (less than), `<=` (less than or equal).
+
+#### Date/Time Range Filtering
+
+Filter results by date and time values:
+
+```python
+from datetime import datetime, date
+from minsearch import AppendableIndex
+
+docs = [
+    {
+        "title": "Python Course",
+        "start_date": date(2024, 1, 15),
+        "created_at": datetime(2023, 12, 1, 10, 30)
+    },
+    {
+        "title": "Data Science Course",
+        "start_date": date(2024, 2, 1),
+        "created_at": datetime(2023, 12, 15, 14, 0)
+    },
+]
+
+index = AppendableIndex(
+    text_fields=["title"],
+    keyword_fields=[],
+    date_fields=["start_date", "created_at"]
+)
+index.fit(docs)
+
+# Courses starting after a specific date
+results = index.search(
+    "python",
+    filter_dict={"start_date": [(">", date(2024, 1, 1))]}
+)
+
+# Courses created in a date range
+results = index.search(
+    "course",
+    filter_dict={
+        "created_at": [
+            (">=", datetime(2023, 12, 1)),
+            ("<=", datetime(2023, 12, 31))
+        ]
+    }
+)
+```
+
+Date fields accept `date`, `datetime`, or `pandas.Timestamp` objects.
+
+#### Combined Filtering
+
+You can combine keyword, numeric, and date filters in a single query:
+
+```python
+results = index.search(
+    "python course",
+    filter_dict={
+        "level": "advanced",                      # Keyword filter
+        "price": [("<", 100)],                    # Numeric filter
+        "start_date": [(">", date(2024, 1, 1))]   # Date filter
+    }
+)
+```
+
+### Result Highlighting
+
+The `Highlighter` class works with search results from any index type (`Index`, `AppendableIndex`, or `VectorSearch`). It extracts highlighted snippets from search results, showing where the query terms match in the text:
+
+```python
+from minsearch import AppendableIndex, Highlighter, Tokenizer
+
+# Create documents
+docs = [
+    {
+        "question": "How do I join the course after it has started?",
+        "text": "You can join the course at any time. We have recordings available for all sessions.",
+        "course": "data-engineering-zoomcamp"
+    },
+    {
+        "question": "Can I get a refund if I drop the course?",
+        "text": "Refunds are available within the first 30 days of enrollment.",
+        "course": "data-engineering-zoomcamp"
+    }
+]
+
+# Create and fit the index
+tokenizer = Tokenizer(
+    stop_words='english',
+    stemmer='porter'
+)
+
+index = AppendableIndex(
+    text_fields=["question", "text"],
+    keyword_fields=["course"],
+    tokenizer=tokenizer
+)
+index.fit(docs)
+
+# Search
+results = index.search("join course", num_results=1)
+
+# Create highlighter
+highlighter = Highlighter(
+    highlight_fields=["question", "text"],
+    skip_fields=["course"],
+    max_matches=3,
+    snippet_size=150,
+    highlight_format="**",  # Bold with markdown
+    tokenizer=tokenizer
+)
+
+# Highlight results
+highlighted = highlighter.highlight("join course", results)
+```
+
+Example output:
+
+```json
+{
+    "question": {
+        "matches": ["How do I **join** the **course** after it has started?"],
+        "total_matches": 1
+    },
+    "text": {
+        "matches": ["You can **join** the **course** at any time. We have recordings available for..."],
+        "total_matches": 1
+    },
+    "course": "data-engineering-zoomcamp"
+}
+```
+
+Highlighter options:
+
+- `highlight_fields`: List of field names to extract highlights from
+- `skip_fields`: List of field names to exclude from output (pass-through only)
+- `max_matches`: Maximum number of matches to return per field (default: 5)
+- `snippet_size`: Maximum characters per match snippet (default: 200)
+- `highlight_format`: Format for highlights - can be a string delimiter, tuple (open, close), or callable
+- `tokenizer`: Tokenizer to use (must match the index's tokenizer for best results)
+
+Custom highlight formats:
+
+```python
+# Markdown bold (default)
+highlighter = Highlighter(..., highlight_format="**")  # **text**
+
+# HTML
+highlighter = Highlighter(..., highlight_format=("<b>", "</b>"))  # <b>text</b>
+
+# ANSI for terminal
+highlighter = Highlighter(..., highlight_format="\033[1m")  # text (bold)
+
+# Custom function
+highlighter = Highlighter(..., highlight_format=lambda t: f"[{t}]")  # [text]
+```
+
+### Stemming
+
+Stemming reduces words to their root form, improving search recall by matching different word forms. For example, "running", "runs", and "ran" all stem to "run".
+
+```python
+from minsearch import AppendableIndex
+from minsearch.tokenizer import Tokenizer
+
+# Use stemming with the default English stop words
+tokenizer = Tokenizer(
+    stop_words='english',
+    stemmer='snowball'  # Options: 'porter', 'snowball', 'lancaster', or None
+)
+
+index = AppendableIndex(
+    text_fields=["title", "description"],
+    keyword_fields=["course"],
+    tokenizer=tokenizer
+)
+
+# Now "joining" will match "join", "joined", "joins", etc.
+results = index.search("joining the course")
+```
+
+### Stemmer Comparison
+
+- **Porter** - Original Porter algorithm (1980)
+  - Well-established, fast, good for English
+  - Some edge cases, less aggressive than Snowball
+  - Good default for general use
+
+- **Snowball** (Porter2) - Improved Porter algorithm
+  - Handles more edge cases, more accurate stemming, has official specification
+  - Slightly slower than Porter
+  - **Recommended** - best overall accuracy
+
+- **Lancaster** - Very aggressive stemming
+  - Reduces words to shortest stems, good for recall
+  - Can over-stem, may produce non-words
+  - Use when maximizing recall is critical
+
+- **None** - No stemming
+  - Preserves original words, fastest
+  - No morphological matching
+  - Use for exact matching only
+
+**Recommendation**: Use the `snowball` stemmer for best overall accuracy. It's based on the [official Snowball specification](https://snowballstem.org/algorithms/english/stemmer.html) and handles more edge cases than Porter while being less aggressive than Lancaster.
 
 ## Examples
 

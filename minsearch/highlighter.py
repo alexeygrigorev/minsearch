@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List, Optional, Set, Callable, Union, Tuple
-from collections import Counter
+
+from .tokenizer import Tokenizer
 
 
 HighlightFormat = Union[
@@ -19,11 +20,16 @@ class Highlighter:
         highlight_fields: List of field names to extract highlights from.
         skip_fields: List of field names to exclude from output.
         max_matches: Maximum number of matches to return per field (default 5).
-        snippet_size: Maximum characters per match snippet (default 200).
+        snippet_size: Maximum number of characters per match snippet (default 200).
         highlight_format: Format for highlights. Can be:
             - str: Delimiter to wrap both sides ("**" -> **text**)
             - tuple: (open, close) delimiters (("[", "]") -> [text])
             - callable: lambda text: f"__{text}__" -> __text__
+        stemmer: Stemmer to use. Can be:
+            - None: No stemming (exact word match)
+            - 'porter', 'snowball', 'lancaster': Built-in stemmers
+            - callable: Custom stemmer function (word -> stemmed_word)
+        stop_words: Set of stop words to ignore. If None, uses defaults.
 
     Example:
         >>> from minsearch import Index, Highlighter
@@ -31,47 +37,12 @@ class Highlighter:
         >>> index.fit(docs)
         >>> highlighter = Highlighter(
         ...     highlight_fields=['question', 'text'],
-        ...     skip_fields=['course']
+        ...     skip_fields=['course'],
+        ...     stemmer='porter'  # Enable stemming
         ... )
-        >>> results = index.search('python machine learning')
-        >>> highlighted = highlighter.highlight('python machine learning', results)
-        >>> print(highlighted[0])
-        {
-            'question': {
-                'matches': ['How do I use **Python** for **machine learning**?'],
-                'total_matches': 2
-            },
-            'text': {
-                'matches': ['**Python** is a programming language...'],
-                'total_matches': 3
-            },
-            'section': 'Programming'  # pass-through
-        }
+        >>> results = index.search('joining')  # Will match 'join', 'joined', 'joining'
+        >>> highlighted = highlighter.highlight('joining', results)
     """
-
-    DEFAULT_STOP_WORDS: Set[str] = {
-        "a", "about", "above", "after", "again", "against", "all", "am", "an",
-        "and", "any", "are", "aren't", "as", "at", "be", "because", "been",
-        "before", "being", "below", "between", "both", "but", "by", "can't",
-        "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't",
-        "doing", "don't", "down", "during", "each", "few", "for", "from",
-        "further", "had", "hadn't", "has", "hasn't", "have", "haven't", "having",
-        "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers", "herself",
-        "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm",
-        "i've", "if", "in", "into", "is", "isn't", "it", "it's", "its", "itself",
-        "let's", "me", "more", "most", "mustn't", "my", "myself", "no", "nor",
-        "not", "of", "off", "on", "once", "only", "or", "other", "ought", "our",
-        "ours", "ourselves", "out", "over", "own", "same", "shan't", "she",
-        "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
-        "than", "that", "that's", "the", "their", "theirs", "them", "themselves",
-        "then", "there", "there's", "these", "they", "they'd", "they'll", "they're",
-        "they've", "this", "those", "through", "to", "too", "under", "until", "up",
-        "very", "was", "wasn't", "we", "we'd", "we'll", "we're", "we've", "were",
-        "weren't", "what", "what's", "when", "when's", "where", "where's", "which",
-        "while", "who", "who's", "whom", "why", "why's", "with", "won't", "would",
-        "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours",
-        "yourself", "yourselves",
-    }
 
     def __init__(
         self,
@@ -80,7 +51,7 @@ class Highlighter:
         max_matches: int = 5,
         snippet_size: int = 200,
         highlight_format: HighlightFormat = "**",
-        stop_words: Optional[Set[str]] = None,
+        tokenizer: Optional[Tokenizer] = None,
     ):
         """
         Initialize the Highlighter.
@@ -91,14 +62,19 @@ class Highlighter:
             max_matches: Maximum matches to return per field.
             snippet_size: Maximum characters per match snippet.
             highlight_format: Format for highlights (str, tuple, or callable).
-            stop_words: Set of stop words to ignore. If None, uses defaults.
+            tokenizer: Tokenizer to use. If None, creates a default one.
         """
         self.highlight_fields = highlight_fields
         self.skip_fields = set(skip_fields or [])
         self.max_matches = max_matches
         self.snippet_size = snippet_size
         self.highlight_format = highlight_format
-        self.stop_words = self.DEFAULT_STOP_WORDS if stop_words is None else stop_words
+
+        # Set up tokenizer
+        if tokenizer is not None:
+            self.tokenizer = tokenizer
+        else:
+            self.tokenizer = Tokenizer()  # No stop words by default
 
     def _apply_highlight(self, text: str) -> str:
         """Apply highlight formatting to a piece of text."""
@@ -116,70 +92,64 @@ class Highlighter:
 
         return f"**{text}**"
 
-    def _tokenize(self, text: str) -> List[str]:
-        """Tokenize text into lowercase words, removing stop words."""
-        pattern = re.compile(r"[\s\W\d]+")
-        tokens = [token.lower() for token in pattern.split(text) if token]
-        tokens = [token for token in tokens if token not in self.stop_words]
-        return tokens
-
     def _extract_query_terms(self, query: str) -> List[str]:
         """
         Extract meaningful query terms (removing stop words).
 
-        Preserves multi-word phrases and returns terms in order of appearance.
+        Applies stemming if the tokenizer has a stemmer configured.
+
+        Returns:
+            List of query terms (stemmed if stemmer is set).
         """
-        # First, try to extract phrases (words in quotes)
-        phrases = []
-        phrase_pattern = re.compile(r'"([^"]+)"')
-        for match in phrase_pattern.finditer(query):
-            phrases.append(match.group(1))
-
-        # Tokenize the query (without quotes)
-        query_no_quotes = phrase_pattern.sub('', query)
-        tokens = self._tokenize(query_no_quotes)
-
-        # Combine phrases and tokens, preserving order
-        result = []
-        query_lower = query.lower()
-
-        # Add tokens that appear in the query
-        for token in tokens:
-            if token in query_lower:
-                result.append(token)
-
-        # Add phrases
-        for phrase in phrases:
-            phrase_lower = phrase.lower()
-            # Only add if the phrase actually appears in the query
-            if phrase_lower in query_lower:
-                result.append(phrase_lower)
-
-        return result
+        # Tokenize the query
+        # Note: tokenizer already applies stemming if configured
+        tokens = self.tokenizer.tokenize(query)
+        return tokens
 
     def _find_match_positions(self, text: str, query_terms: List[str]) -> List[tuple[int, int, str]]:
-        """Find all positions where query terms appear in text."""
+        """
+        Find all positions where query terms appear in text.
+
+        If stemmer is configured, matches stemmed versions but returns
+        original text positions for highlighting.
+        """
         if not text:
             return []
 
-        text_lower = text.lower()
         matches = []
 
-        for term in query_terms:
-            start = 0
-            while True:
-                pos = text_lower.find(term, start)
-                if pos == -1:
-                    break
-                # Check word boundary
-                before_ok = pos == 0 or not text_lower[pos - 1].isalnum()
-                after_ok = (
-                    pos + len(term) >= len(text_lower)
-                    or not text_lower[pos + len(term)].isalnum()
-                )
-                if before_ok and after_ok:
-                    matches.append((pos, pos + len(term), term))
-                start = pos + 1
+        if self.tokenizer.stemmer:
+            # With stemming: tokenize text, stem each word, match against stemmed query terms
+            # Use regex to find word boundaries
+            word_pattern = re.compile(r'\b\w+\b')
+            stemmed_query_terms = set(query_terms)
+
+            for match in word_pattern.finditer(text):
+                word = match.group()
+                word_lower = word.lower()
+                stemmed = self.tokenizer.stemmer(word_lower)
+
+                if stemmed in stemmed_query_terms:
+                    start, end = match.span()
+                    matches.append((start, end, stemmed))
+        else:
+            # No stemming: simple string matching
+            text_lower = text.lower()
+            for term in query_terms:
+                start = 0
+                while True:
+                    pos = text_lower.find(term, start)
+                    if pos == -1:
+                        break
+                    # Check word boundary
+                    before_ok = pos == 0 or not text_lower[pos - 1].isalnum()
+                    after_ok = (
+                        pos + len(term) >= len(text_lower)
+                        or not text_lower[pos + len(term)].isalnum()
+                    )
+                    if before_ok and after_ok:
+                        matches.append((pos, pos + len(term), term))
+                    start = pos + 1
 
         matches.sort(key=lambda x: x[0])
         return matches

@@ -8,8 +8,9 @@ import numpy as np
 import warnings
 
 warnings.warn(
-    "Now minsearch is installable via pip: 'pip install minsearch'. "
-    "Remove the downloaded file and re-install it with pip.",
+    "Now minsearch is available at pypi. " \
+    "Run 'pip install minsearch' or 'uv add minsearch' to use it. "
+    "Remove the downloaded file ('rm minsearch.py') and re-install it.",
     UserWarning,
 )
 

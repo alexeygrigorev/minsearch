@@ -115,7 +115,7 @@ class Validator:
                     raise FilterValidationError(
                         f"Date field '{field}' requires date/datetime objects for range filters"
                     )
-        elif not isinstance(value, (date, datetime, pd.Timestamp, str)):
+        elif not isinstance(value, (date, datetime, pd.Timestamp)):
             raise FilterValidationError(
                 f"Date field '{field}' requires date/datetime objects"
             )
