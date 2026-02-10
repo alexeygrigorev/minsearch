@@ -38,7 +38,7 @@ def measure_memory(func, *args, **kwargs):
 def format_time(seconds):
     """Format time in human-readable format."""
     if seconds < 0.001:
-        return f"{seconds * 1000000:.2f} μs"
+        return f"{seconds * 1000000:.2f} us"
     elif seconds < 1:
         return f"{seconds * 1000:.2f} ms"
     else:
