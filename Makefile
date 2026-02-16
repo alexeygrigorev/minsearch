@@ -1,4 +1,4 @@
-.PHONY: setup test clean publish-test publish clean-build install install-dev shell list notebook build check
+.PHONY: setup test clean publish-build publish-test publish publish-clean clean-build install install-dev shell list notebook build check
 
 # Development setup
 setup:
@@ -16,6 +16,9 @@ build:
 check:
 	uv run hatch check
 
+# Build for publishing (clean + build + check)
+publish-build: clean build check
+
 # Publish to test PyPI
 publish-test:
 	uv run hatch publish --repo test
@@ -23,6 +26,10 @@ publish-test:
 # Publish to PyPI
 publish:
 	uv run hatch publish
+
+# Clean build artifacts after publishing
+publish-clean:
+	rm -rf dist/
 
 # Clean build artifacts
 clean:
