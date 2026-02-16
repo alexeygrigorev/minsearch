@@ -10,19 +10,19 @@ test:
 
 # Build package
 build:
-	uv run python -m build
+	uv run hatch build
 
 # Check built packages
 check:
-	uv run twine check dist/*
+	uv run hatch check
 
 # Publish to test PyPI
 publish-test:
-	uv run twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	uv run hatch publish --repo test
 
 # Publish to PyPI
 publish:
-	uv run twine upload dist/*
+	uv run hatch publish
 
 # Clean build artifacts
 clean:
