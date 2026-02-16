@@ -1,3 +1,6 @@
+import pickle
+from pathlib import Path
+
 import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -183,3 +186,27 @@ class Index:
         if output_ids:
             return [{**self.docs[i], '_id': int(i)} for i in top_indices]
         return [self.docs[i] for i in top_indices]
+
+    def save(self, path: str | Path) -> None:
+        """
+        Save the index to a file using pickle.
+
+        Args:
+            path: File path to save the index to.
+        """
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Index":
+        """
+        Load an index from a file.
+
+        Args:
+            path: File path to load the index from.
+
+        Returns:
+            The loaded Index instance.
+        """
+        with open(path, 'rb') as f:
+            return pickle.load(f)

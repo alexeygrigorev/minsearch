@@ -1,6 +1,8 @@
 import re
 import math
+import pickle
 from collections import defaultdict, Counter
+from pathlib import Path
 from typing import Dict, List, Set, Optional, Union, Callable
 from datetime import date, datetime
 import numpy as np
@@ -456,3 +458,27 @@ class AppendableIndex:
         if output_ids:
             return [{**self.docs[i], "_id": int(i)} for i in top_indices]
         return [self.docs[i] for i in top_indices]
+
+    def save(self, path: str | Path) -> None:
+        """
+        Save the index to a file using pickle.
+
+        Args:
+            path: File path to save the index to.
+        """
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "AppendableIndex":
+        """
+        Load an index from a file.
+
+        Args:
+            path: File path to load the index from.
+
+        Returns:
+            The loaded AppendableIndex instance.
+        """
+        with open(path, 'rb') as f:
+            return pickle.load(f)

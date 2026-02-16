@@ -9,12 +9,17 @@ from .snowball import snowball_stemmer
 from .lancaster import lancaster_stemmer
 
 
+def _none_stemmer(w: str) -> str:
+    """No-op stemmer that just lowercases the word."""
+    return w.lower() if w else ""
+
+
 # Registry of available stemmers
 STEMMERS: Dict[str, Callable[[str], str]] = {
     "porter": porter_stemmer,
     "snowball": snowball_stemmer,
     "lancaster": lancaster_stemmer,
-    "none": lambda w: w.lower() if w else "",
+    "none": _none_stemmer,
 }
 
 

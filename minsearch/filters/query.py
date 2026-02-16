@@ -3,6 +3,7 @@ Query objects for validated filters.
 """
 from dataclasses import dataclass
 from enum import Enum
+import operator as op
 import pandas as pd
 from datetime import date, datetime
 
@@ -15,12 +16,12 @@ class Operator(Enum):
         self.symbol = symbol
         self.func = func
 
-    GREATER_EQUAL = ('>=', lambda a, b: a >= b)
-    GREATER = ('>', lambda a, b: a > b)
-    LESS_EQUAL = ('<=', lambda a, b: a <= b)
-    LESS = ('<', lambda a, b: a < b)
-    EQUAL = ('==', lambda a, b: a == b)
-    NOT_EQUAL = ('!=', lambda a, b: a != b)
+    GREATER_EQUAL = ('>=', op.ge)
+    GREATER = ('>', op.gt)
+    LESS_EQUAL = ('<=', op.le)
+    LESS = ('<', op.lt)
+    EQUAL = ('==', op.eq)
+    NOT_EQUAL = ('!=', op.ne)
 
     def __str__(self) -> str:
         """Return the symbol representation."""
