@@ -87,6 +87,11 @@ class AppendableIndex:
             field: {} for field in text_fields
         }
 
+        # Full TF-IDF L2 norm per document, recomputed when IDF changes.
+        self.doc_norms: Dict[str, Dict[int, float]] = {
+            field: {} for field in text_fields
+        }
+
         # Keyword data storage
         self.keyword_data: Dict[str, List] = {
             field: [] for field in self.keyword_fields
@@ -162,12 +167,21 @@ class AppendableIndex:
     def _finalize_index(self):
         """
         Finalize the index after fit/append operations.
-        Pre-computes IDF values for all tokens and updates the filter.
+        Pre-computes IDF values and document norms for all tokens.
         """
         for field in self.text_fields:
             self.idf[field] = {}
             for token, df in self.doc_frequencies[field].items():
                 self.idf[field][token] = self._compute_idf(field, df)
+
+            self.doc_norms[field] = {}
+            for doc_id, token_counts in self.doc_token_counts[field].items():
+                norm_sq = 0.0
+                for token, count in token_counts.items():
+                    tfidf = count * self.idf[field].get(token, 1.0)
+                    norm_sq += tfidf * tfidf
+                if norm_sq > 0:
+                    self.doc_norms[field][doc_id] = math.sqrt(norm_sq)
 
     def _get_matching_documents(self, field: str, tokens: List[str]) -> Set[int]:
         """Get set of document IDs that match any of the given tokens."""
@@ -186,8 +200,10 @@ class AppendableIndex:
         Returns:
             (query_vector, field_tokens) or (None, None) if no matches
         """
-        # Filter to tokens that exist in our index
-        field_tokens = [t for t in query_tokens if t in self.inverted_index[field]]
+        # Filter to unique tokens that exist in our index, preserving query order.
+        field_tokens = list(dict.fromkeys(
+            t for t in query_tokens if t in self.inverted_index[field]
+        ))
         if not field_tokens:
             return None, None
 
@@ -197,11 +213,7 @@ class AppendableIndex:
         # Calculate query vector
         query_vector = np.zeros(len(field_tokens))
         for i, token in enumerate(field_tokens):
-            # TF in query (sublinear TF scaling like sklearn)
             tf = query_token_counts[token]
-            if tf > 0:
-                tf = 1 + math.log(tf)
-            # Use pre-computed IDF
             idf = self.idf[field].get(token, 1.0)
             query_vector[i] = tf * idf
 
@@ -218,32 +230,28 @@ class AppendableIndex:
         """
         Calculate cosine similarity between query and a document.
 
-        Uses pre-computed token counts for efficiency.
-        Only considers tokens that are in the query.
+        Uses pre-computed token counts and full document norms for efficiency.
         """
         # Get pre-computed token counts for this document
         doc_token_counts = self.doc_token_counts[field].get(doc_id)
         if not doc_token_counts:
             return 0.0
 
-        # Build document vector ONLY for query tokens, compute dot product and norm
+        doc_norm = self.doc_norms[field].get(doc_id, 0.0)
+        if doc_norm == 0:
+            return 0.0
+
+        # Build only the query-token slice for the dot product. The denominator
+        # uses the full document vector norm computed during finalization.
         dot_product = 0.0
-        doc_norm_sq = 0.0
 
         for i, token in enumerate(field_tokens):
             count = doc_token_counts.get(token)
             if count is not None:
-                # Sublinear TF scaling
-                tf = 1 + math.log(count)
-                idf = self.idf[field].get(token, 1.0)
-                tfidf = tf * idf
+                tfidf = count * self.idf[field].get(token, 1.0)
                 dot_product += query_vector[i] * tfidf
-                doc_norm_sq += tfidf * tfidf
 
-        # Cosine similarity (only over query tokens)
-        if doc_norm_sq == 0:
-            return 0.0
-        return dot_product / math.sqrt(doc_norm_sq)
+        return dot_product / doc_norm
 
     def _calculate_field_scores(
         self,
@@ -281,6 +289,7 @@ class AppendableIndex:
             self.doc_frequencies[field] = defaultdict(int)
             self.doc_tokens[field] = {}
             self.doc_token_counts[field] = {}
+            self.doc_norms[field] = {}
             self.vocabularies[field] = set()
 
         for field in self.keyword_fields:

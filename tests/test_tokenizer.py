@@ -65,6 +65,16 @@ class TestTokenizer:
         assert "11" not in tokens
         assert "123" not in tokens
 
+    def test_single_character_tokens_removed_by_default(self):
+        tokenizer = Tokenizer()
+        tokens = tokenizer.tokenize("how do I create a dashboard")
+        assert tokens == ["how", "do", "create", "dashboard"]
+
+    def test_single_character_tokens_can_be_enabled(self):
+        tokenizer = Tokenizer(min_token_length=1)
+        tokens = tokenizer.tokenize("how do I create a dashboard")
+        assert tokens == ["how", "do", "i", "create", "a", "dashboard"]
+
     def test_lowercase_conversion(self):
         tokenizer = Tokenizer()
         tokens = tokenizer.tokenize("HELLO World PyTHon")

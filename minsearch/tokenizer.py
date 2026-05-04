@@ -40,6 +40,7 @@ class Tokenizer:
         pattern: str = r"[\s\W\d]+",
         stop_words: Optional[StopWordsOption] = None,
         stemmer: Optional[Union[str, Callable[[str], str]]] = None,
+        min_token_length: int = 2,
     ):
         """
         Initialize the tokenizer with a regex pattern and stop words.
@@ -54,8 +55,11 @@ class Tokenizer:
                 - None: No stemming (default)
                 - str: Name of built-in stemmer ('porter', 'snowball', 'lancaster')
                 - callable: Custom stemmer function (word -> stemmed_word)
+            min_token_length: Minimum token length to keep. Defaults to 2 to
+                match sklearn's default TfidfVectorizer token pattern.
         """
         self.pattern = re.compile(pattern)
+        self.min_token_length = min_token_length
         if stop_words == 'english':
             self.stop_words = DEFAULT_ENGLISH_STOP_WORDS
         elif stop_words is None:
@@ -88,6 +92,8 @@ class Tokenizer:
         tokens = []
         for token in self.pattern.split(text):
             if not token:
+                continue
+            if len(token) < self.min_token_length:
                 continue
             if token in self.stop_words:
                 continue

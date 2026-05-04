@@ -648,6 +648,55 @@ def test_appended_document_normalized_correctly():
     )
 
 
+def test_fit_ranking_penalizes_long_irrelevant_content_like_index():
+    """
+    Regression test for scoring documents against only the query-token slice.
+
+    The noisy document matches one query term many times, but should not outrank
+    a concise document that matches the complete query.
+    """
+    docs = [
+        {
+            "title": "Dashboard guide",
+            "description": "Create dashboard",
+            "content": "Create a dashboard from a project and add panels.",
+            "filename": "dashboard.md",
+        },
+        {
+            "title": "Reference page",
+            "description": "Dashboard",
+            "content": "dashboard " * 20 + "unrelated configuration details " * 200,
+            "filename": "reference.md",
+        },
+        {
+            "title": "Create resources",
+            "description": "Create",
+            "content": "create " + "unrelated api material " * 200,
+            "filename": "resources.md",
+        },
+    ]
+
+    text_fields = ["title", "description", "content"]
+    keyword_fields = ["filename"]
+
+    regular_index = Index(text_fields=text_fields, keyword_fields=keyword_fields)
+    regular_index.fit(docs)
+
+    appendable_index = AppendableIndex(
+        text_fields=text_fields,
+        keyword_fields=keyword_fields,
+    )
+    appendable_index.fit(docs)
+
+    query = "create dashboard"
+
+    regular_results = regular_index.search(query, num_results=3)
+    appendable_results = appendable_index.search(query, num_results=3)
+
+    assert regular_results[0]["filename"] == "dashboard.md"
+    assert appendable_results[0]["filename"] == regular_results[0]["filename"]
+
+
 class TestAppendableIndexRangeFilters:
     """Tests for numeric and date range filters in AppendableIndex."""
 
