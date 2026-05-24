@@ -19,13 +19,13 @@ check:
 # Build for publishing (clean + build + check)
 publish-build: clean build check
 
-# Publish to test PyPI
-publish-test:
-	uv run hatch publish --repo test
-
-# Publish to PyPI
-publish:
-	uv run hatch publish
+# Release: tag the current version and push to trigger CI publish.
+# CI workflow: .github/workflows/publish.yml (on tag push v*)
+release:
+	@VERSION=$$(grep -E "^__version__" minsearch/__version__.py | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/"); \
+	echo "Releasing v$$VERSION"; \
+	git tag "v$$VERSION"; \
+	git push origin "v$$VERSION"
 
 # Clean build artifacts after publishing
 publish-clean:
