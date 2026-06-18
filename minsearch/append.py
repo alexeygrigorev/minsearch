@@ -408,6 +408,8 @@ class AppendableIndex:
         Args:
             query: The search query string.
             filter_dict: Dictionary of keyword, numeric, and date fields to filter by.
+                Keyword values may be scalars for exact match, or list/tuple/set
+                values to match any value within that field.
             boost_dict: Dictionary of boost scores for text fields.
             num_results: The number of top results to return.
             output_ids: If True, adds an '_id' field to each document.

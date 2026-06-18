@@ -132,8 +132,9 @@ class Index:
             query (str): The search query string.
             filter_dict (dict): Dictionary of filters. Can include:
                 - Keyword fields: {"field": "value"} for exact match
+                - Keyword fields: {"field": ["value1", "value2"]} to match any value
                 - Numeric/date fields: {"field": [('>=', value), ('<', value)]} for range filters
-                - Multiple conditions on the same field are combined with AND
+                - Multiple fields are combined with AND
             boost_dict (dict): Dictionary of boost scores for text fields. Keys are field names and values are the boost scores.
             num_results (int): The number of top results to return. Defaults to 10.
             output_ids (bool): If True, adds an '_id' field to each document containing its index. Defaults to False.

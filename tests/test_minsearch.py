@@ -261,6 +261,77 @@ def test_keyword_fields():
     assert results[0]["course"] == "CS101"
 
 
+def test_keyword_list_filter_matches_any():
+    docs = [
+        {"title": "Python Programming", "course": "CS101", "kind": "lesson"},
+        {"title": "Python Testing", "course": "CS102", "kind": "faq"},
+        {"title": "Python Data Science", "course": "CS103", "kind": "lesson"},
+        {"title": "Python Web", "course": "", "kind": "faq"},
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course", "kind"])
+    index.fit(docs)
+
+    results = index.search("python", filter_dict={"course": ["CS101", ""]}, num_results=10)
+
+    assert sorted(result["course"] for result in results) == ["", "CS101"]
+
+
+def test_keyword_list_filter_is_union_not_intersection():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Python Testing", "course": "CS102"},
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+
+    results = index.search("python", filter_dict={"course": ["CS101", "CS102"]}, num_results=10)
+
+    assert sorted(result["course"] for result in results) == ["CS101", "CS102"]
+
+
+def test_keyword_list_filter_combines_with_other_fields_via_and():
+    docs = [
+        {"title": "Python Programming", "course": "CS101", "kind": "lesson"},
+        {"title": "Python Testing", "course": "CS102", "kind": "faq"},
+        {"title": "Python Data Science", "course": "CS103", "kind": "lesson"},
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course", "kind"])
+    index.fit(docs)
+
+    results = index.search(
+        "python",
+        filter_dict={"course": ["CS101", "CS102"], "kind": "faq"},
+        num_results=10,
+    )
+
+    assert [result["course"] for result in results] == ["CS102"]
+
+
+def test_keyword_empty_list_filter_matches_nothing():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Python Testing", "course": "CS102"},
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+
+    assert index.search("python", filter_dict={"course": []}) == []
+
+
+def test_keyword_single_element_list_filter_equals_scalar():
+    docs = [
+        {"title": "Python Programming", "course": "CS101"},
+        {"title": "Python Testing", "course": "CS102"},
+    ]
+    index = Index(text_fields=["title"], keyword_fields=["course"])
+    index.fit(docs)
+
+    scalar = index.search("python", filter_dict={"course": "CS101"})
+    listed = index.search("python", filter_dict={"course": ["CS101"]})
+
+    assert scalar == listed
+
+
 def test_num_results():
     docs = [
         {"title": "Python Programming", "course": "CS101"},

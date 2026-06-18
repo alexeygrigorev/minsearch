@@ -3,6 +3,7 @@ Query objects for validated filters.
 """
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 import operator as op
 import pandas as pd
 from datetime import date, datetime
@@ -47,7 +48,7 @@ class Condition:
 class KeywordQuery:
     """Exact match query for keyword fields."""
     field: str
-    value: str | None
+    value: Any
 
 
 @dataclass

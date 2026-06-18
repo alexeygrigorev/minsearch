@@ -10,6 +10,10 @@ from datetime import date, datetime
 from .query import Condition
 
 
+def _is_multi_value(value: Any) -> bool:
+    return isinstance(value, (list, tuple, set))
+
+
 class Masker(ABC):
     """Abstract base class for generating filter masks."""
 
@@ -30,6 +34,8 @@ class PandasMasker(Masker):
         self.num_docs = num_docs
 
     def match_mask(self, field: str, value: Any) -> np.ndarray:
+        if _is_multi_value(value):
+            return self.data[field].isin(value).to_numpy()
         if value is None:
             return self.data[field].isna().to_numpy()
         return (self.data[field] == value).to_numpy()
@@ -53,6 +59,11 @@ class DictMasker(Masker):
         self.num_docs = num_docs
 
     def match_mask(self, field: str, value: Any) -> np.ndarray:
+        if _is_multi_value(value):
+            return np.array([
+                any(val == candidate for candidate in value)
+                for val in self.data[field]
+            ])
         if value is None:
             return np.array([val is None for val in self.data[field]])
         return np.array([val == value for val in self.data[field]])

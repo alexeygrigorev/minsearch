@@ -189,6 +189,18 @@ class TestPandasMasker:
         mask = self.masker.match_mask('category', 'tech')
         np.testing.assert_array_equal(mask, [1, 1, 0])
 
+    def test_match_mask_keyword_list(self):
+        mask = self.masker.match_mask('category', ['tech', 'missing'])
+        np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_match_mask_keyword_empty_list(self):
+        mask = self.masker.match_mask('category', [])
+        np.testing.assert_array_equal(mask, [0, 0, 0])
+
+    def test_match_mask_keyword_list_with_none(self):
+        mask = self.masker.match_mask('status', ['active', None])
+        np.testing.assert_array_equal(mask, [1, 1, 1])
+
     def test_match_mask_numeric(self):
         mask = self.masker.match_mask('price', 100)
         np.testing.assert_array_equal(mask, [1, 0, 0])
@@ -225,6 +237,18 @@ class TestDictMasker:
     def test_match_mask_keyword(self):
         mask = self.masker.match_mask('category', 'tech')
         np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_match_mask_keyword_tuple(self):
+        mask = self.masker.match_mask('category', ('tech', 'missing'))
+        np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_match_mask_keyword_empty_set(self):
+        mask = self.masker.match_mask('category', set())
+        np.testing.assert_array_equal(mask, [0, 0, 0])
+
+    def test_match_mask_keyword_set_with_none(self):
+        mask = self.masker.match_mask('status', {'active', None})
+        np.testing.assert_array_equal(mask, [1, 1, 1])
 
     def test_match_mask_numeric(self):
         mask = self.masker.match_mask('price', 100)
@@ -274,6 +298,25 @@ class TestFilter:
     def test_apply_keyword_filter(self):
         mask = self.filter.apply({'category': 'tech'})
         np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_apply_keyword_list_filter(self):
+        mask = self.filter.apply({'category': ['tech', 'health']})
+        np.testing.assert_array_equal(mask, [1, 1, 1])
+
+    def test_apply_keyword_list_filter_is_union(self):
+        mask = self.filter.apply({'status': ['active', None]})
+        np.testing.assert_array_equal(mask, [1, 1, 1])
+
+    def test_apply_keyword_empty_list_filter(self):
+        mask = self.filter.apply({'category': []})
+        np.testing.assert_array_equal(mask, [0, 0, 0])
+
+    def test_apply_keyword_list_combines_with_other_fields_via_and(self):
+        mask = self.filter.apply({
+            'category': ['tech', 'health'],
+            'status': 'active',
+        })
+        np.testing.assert_array_equal(mask, [1, 0, 1])
 
     def test_apply_numeric_exact_filter(self):
         mask = self.filter.apply({'price': 100})
@@ -328,6 +371,14 @@ class TestFilterWithDictData:
     def test_apply_keyword_filter_dict(self):
         mask = self.filter.apply({'category': 'tech'})
         np.testing.assert_array_equal(mask, [1, 1, 0])
+
+    def test_apply_keyword_tuple_filter_dict(self):
+        mask = self.filter.apply({'category': ('tech', 'health')})
+        np.testing.assert_array_equal(mask, [1, 1, 1])
+
+    def test_apply_keyword_empty_list_filter_dict(self):
+        mask = self.filter.apply({'category': []})
+        np.testing.assert_array_equal(mask, [0, 0, 0])
 
     def test_apply_numeric_range_filter_dict(self):
         mask = self.filter.apply({'price': [('>=', 50), ('<', 150)]})

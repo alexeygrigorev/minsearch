@@ -6,6 +6,13 @@ A minimalistic search engine that provides both text-based and vector-based sear
 2. `AppendableIndex`: An appendable search index using an inverted index implementation that allows for incremental document addition
 3. `VectorSearch`: A vector search index using cosine similarity for pre-computed vectors
 
+## Sibling Projects
+
+- [`zerosearch`](https://github.com/alexeygrigorev/zerosearch): use when you need
+  zero-dependency, pure Python in-memory text search.
+- [`sqlitesearch`](https://github.com/alexeygrigorev/sqlitesearch): use when you need
+  SQLite-backed text search with a persistent on-disk index.
+
 ## Features
 
 - Text field indexing with TF-IDF and cosine similarity
@@ -194,12 +201,18 @@ All filter types (keyword, numeric range, date/time range) work with all search 
 
 #### Keyword Filtering
 
-Filter results by exact keyword matches:
+Filter results by exact keyword matches. Use a list, tuple, or set to match any
+of several values within the same field:
 
 ```python
 filter_dict = {
     "course": "CS101",
     "level": "beginner"
+}
+results = index.search("python", filter_dict=filter_dict)
+
+filter_dict = {
+    "course": ["CS101", "CS102"]
 }
 results = index.search("python", filter_dict=filter_dict)
 ```
