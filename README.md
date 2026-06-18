@@ -11,7 +11,7 @@ A minimalistic search engine that provides both text-based and vector-based sear
 - [`zerosearch`](https://github.com/alexeygrigorev/zerosearch): use when you need
   zero-dependency, pure Python in-memory text search.
 - [`sqlitesearch`](https://github.com/alexeygrigorev/sqlitesearch): use when you need
-  SQLite-backed text search with a persistent on-disk index.
+  SQLite-backed text and vector search with a persistent on-disk index.
 
 ## Features
 
