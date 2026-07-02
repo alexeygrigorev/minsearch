@@ -32,6 +32,7 @@ dependencies = [
     "numpy",
     "pandas",
     "scikit-learn",
+    "stemlite>=0.1.0",
 ]
 
 [project.optional-dependencies]

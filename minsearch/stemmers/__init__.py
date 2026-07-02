@@ -19,10 +19,13 @@ Example:
     'jump'
 """
 
-from .porter import porter_stemmer
-from .snowball import snowball_stemmer
-from .lancaster import lancaster_stemmer
-from .base import get_stemmer, STEMMERS
+from stemlite import (
+    get_stemmer,
+    porter_stemmer,
+    snowball_stemmer,
+    lancaster_stemmer,
+    STEMMERS,
+)
 
 __all__ = [
     "porter_stemmer",
