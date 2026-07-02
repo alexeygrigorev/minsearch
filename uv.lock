@@ -485,6 +485,7 @@ dependencies = [
     { name = "numpy", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas" },
     { name = "scikit-learn" },
+    { name = "stemlite" },
 ]
 
 [package.optional-dependencies]
@@ -504,6 +505,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "requests", marker = "extra == 'dev'" },
     { name = "scikit-learn" },
+    { name = "stemlite", specifier = ">=0.1.0" },
 ]
 provides-extras = ["dev"]
 
@@ -1041,6 +1043,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
+name = "stemlite"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/4e/4e5ae5f473c0282e76bc3b4966614dc6c72cc6458435e559597b5421ff55/stemlite-0.1.0.tar.gz", hash = "sha256:062d44a1314af379ea6a09f8467d07a776407e456c9932e4e182ef8cfb3948d5", size = 87502, upload-time = "2026-07-02T07:58:24.385Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/4d/a71e4324552914bb279f3b28b9dbdf7b1fcace463146f38a49ca076b385d/stemlite-0.1.0-py3-none-any.whl", hash = "sha256:f0488b4bb5fc38d5796a0d627bb35e99c2a47d9f1b49ffea5400b52099eca5b8", size = 9308, upload-time = "2026-07-02T07:58:23.226Z" },
 ]
 
 [[package]]
